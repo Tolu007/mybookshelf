@@ -32,7 +32,7 @@ export function BookCardActions({
       }).catch(() => setter(!value));
     };
   }
-
+//testing
   return (
     <div className="absolute top-2 left-2 flex gap-1">
       <button
