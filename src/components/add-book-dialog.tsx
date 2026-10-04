@@ -19,31 +19,50 @@ import {
 import { extractClientCover } from "@/lib/extract-cover";
 import { detectBookFormat } from "@/lib/book-format";
 
-function uploadFileWithProgress(
-  url: string,
+const CHUNK_SIZE = 4 * 1024 * 1024; // 4MiB — a multiple of 256KiB per Drive's resumable protocol
+
+// Google's resumable upload PUT endpoint doesn't send CORS headers, so the
+// browser can't hit it directly. We relay chunks through our own server
+// instead — each chunk is small enough to clear any serverless body-size
+// limit, and the relay forwards it to Drive with the Content-Range Drive's
+// resumable protocol expects.
+async function uploadFileInChunks(
+  uploadUrl: string,
   file: File,
   onProgress: (fraction: number) => void
 ): Promise<{ id: string; size?: string }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(event.loaded / event.total);
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText));
-        } catch {
-          reject(new Error("Unexpected response from Drive."));
-        }
-      } else {
-        reject(new Error(`Upload to Drive failed (${xhr.status}).`));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error during upload."));
-    xhr.send(file);
-  });
+  const total = file.size;
+  let start = 0;
+
+  while (start < total) {
+    const end = Math.min(start + CHUNK_SIZE, total);
+    const chunk = file.slice(start, end);
+
+    const response = await fetch("/api/books/upload-chunk", {
+      method: "PUT",
+      headers: {
+        "Content-Range": `bytes ${start}-${end - 1}/${total}`,
+        "X-Upload-Url": uploadUrl,
+      },
+      body: chunk,
+    });
+
+    if (response.status === 308) {
+      start = end;
+      onProgress(end / total);
+      continue;
+    }
+
+    if (response.ok) {
+      onProgress(1);
+      return response.json();
+    }
+
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error ?? `Upload failed (${response.status}).`);
+  }
+
+  throw new Error("Upload did not complete.");
 }
 
 export function AddBookDialog({ categories }: { categories: { id: string; name: string }[] }) {
@@ -103,7 +122,7 @@ export function AddBookDialog({ categories }: { categories: { id: string; name: 
       }
       const { uploadUrl } = await sessionResponse.json();
 
-      const uploaded = await uploadFileWithProgress(uploadUrl, file, setUploadProgress);
+      const uploaded = await uploadFileInChunks(uploadUrl, file, setUploadProgress);
 
       const finalizeResponse = await fetch("/api/books", {
         method: "POST",

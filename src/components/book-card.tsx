@@ -4,9 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { BookCardActions } from "@/components/book-card-actions";
+import { BookCardMenu } from "@/components/book-card-menu";
 
 export function BookCard({
   book,
+  categories = [],
   progressPercent,
 }: {
   book: {
@@ -17,7 +19,9 @@ export function BookCard({
     format: string;
     want_to_read: boolean;
     is_favorite: boolean;
+    category_id?: string | null;
   };
+  categories?: { id: string; name: string }[];
   progressPercent?: number;
 }) {
   const isDataUrl = book.cover_url?.startsWith("data:");
@@ -48,17 +52,29 @@ export function BookCard({
               </div>
             )}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-            <Badge
-              variant="secondary"
-              className="absolute top-2 right-2 bg-background/85 text-[10px] uppercase backdrop-blur-sm"
-            >
-              {book.format}
-            </Badge>
             <BookCardActions
               bookId={book.id}
               initialFavorite={book.is_favorite}
               initialWantToRead={book.want_to_read}
             />
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              <BookCardMenu
+                book={{
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  cover_url: book.cover_url,
+                  category_id: book.category_id ?? null,
+                }}
+                categories={categories}
+              />
+              <Badge
+                variant="secondary"
+                className="bg-background/85 text-[10px] uppercase backdrop-blur-sm"
+              >
+                {book.format}
+              </Badge>
+            </div>
             {typeof progressPercent === "number" && (
               <div className="absolute inset-x-0 bottom-0 bg-background/85 px-2 py-1.5 backdrop-blur-sm">
                 <Progress value={progressPercent} className="h-1" />

@@ -65,6 +65,7 @@ export default async function LibraryPage({
       format: string;
       want_to_read: boolean;
       is_favorite: boolean;
+      category_id: string | null;
     };
   }[] = [];
 
@@ -80,6 +81,7 @@ export default async function LibraryPage({
         format: string;
         want_to_read: boolean;
         is_favorite: boolean;
+        category_id: string | null;
         finished_at: string | null;
       } | null;
     };
@@ -87,7 +89,7 @@ export default async function LibraryPage({
     const { data: progressRows } = await supabase
       .from("reading_progress")
       .select(
-        "percent, updated_at, book:books(id, title, author, cover_url, format, want_to_read, is_favorite, finished_at)"
+        "percent, updated_at, book:books(id, title, author, cover_url, format, want_to_read, is_favorite, category_id, finished_at)"
       )
       .order("updated_at", { ascending: false })
       .limit(10);
@@ -115,7 +117,12 @@ export default async function LibraryPage({
           <h2 className="font-heading text-lg">Continue reading</h2>
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {continueReading.map((row) => (
-              <BookCard key={row.book.id} book={row.book} progressPercent={row.percent} />
+              <BookCard
+                key={row.book.id}
+                book={row.book}
+                categories={categories ?? []}
+                progressPercent={row.percent}
+              />
             ))}
           </div>
         </section>
@@ -150,7 +157,7 @@ export default async function LibraryPage({
         ) : (
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {books.map((book) => (
-              <BookCard key={book.id} book={book} />
+              <BookCard key={book.id} book={book} categories={categories ?? []} />
             ))}
           </div>
         )}
