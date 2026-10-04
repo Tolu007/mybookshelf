@@ -146,3 +146,27 @@
     @apply font-sans;
   }
 }
+
+/* Invisible, selectable text positioned over the PDF canvas by pdf.js's
+   TextLayer — lets users select/highlight text that's really just a raster
+   image. --total-scale-factor/--min-font-size feed TextLayer's own font-size
+   calc(); without them the calc is invalid and spans fall back to an
+   unrelated size, misaligning the hit targets from the visible glyphs. */
+.pdf-text-layer {
+  --total-scale-factor: 1;
+  --min-font-size: 1;
+  line-height: 1;
+}
+
+.pdf-text-layer span,
+.pdf-text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-text-layer ::selection {
+  background: rgba(177, 80, 46, 0.35);
+}
