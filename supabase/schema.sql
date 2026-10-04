@@ -124,6 +124,14 @@ create table if not exists public.annotations (
   created_at timestamptz not null default now()
 );
 
+-- PDF highlight geometry: an array of {x, y, width, height}, each value a
+-- 0-1 fraction of the page's displayed width/height at capture time. Since
+-- all dimensions scale uniformly with zoom, these fractions stay correct at
+-- any zoom level without needing to store an absolute scale. Null for EPUB
+-- highlights (epub.js re-renders those from the stored CFI instead) and for
+-- notes/bookmarks.
+alter table public.annotations add column if not exists rects jsonb;
+
 create index if not exists annotations_user_book_idx on public.annotations (user_id, book_id);
 
 -- Atomic increment so concurrent "mark as finished" calls can't race each
