@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const TYPES = ["highlight", "note", "bookmark"] as const;
+const MAX_RECTS = 50;
+
+function parseRects(value: unknown): { x: number; y: number; width: number; height: number }[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_RECTS) return null;
+
+  const rects = value.map((rect) => ({
+    x: Number(rect?.x),
+    y: Number(rect?.y),
+    width: Number(rect?.width),
+    height: Number(rect?.height),
+  }));
+
+  const isValid = rects.every(({ x, y, width, height }) =>
+    [x, y, width, height].every((n) => Number.isFinite(n) && n >= -1 && n <= 2)
+  );
+
+  return isValid ? rects : null;
+}
 
 export async function GET(
   _request: Request,
@@ -19,7 +37,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("annotations")
-    .select("id, type, location, excerpt, note, created_at")
+    .select("id, type, location, excerpt, note, rects, created_at")
     .eq("book_id", id)
     .order("created_at", { ascending: false });
 
@@ -61,8 +79,9 @@ export async function POST(
       location,
       excerpt: typeof body?.excerpt === "string" ? body.excerpt.slice(0, 1000) : null,
       note: typeof body?.note === "string" ? body.note.slice(0, 2000) : null,
+      rects: parseRects(body?.rects),
     })
-    .select("id, type, location, excerpt, note, created_at")
+    .select("id, type, location, excerpt, note, rects, created_at")
     .single();
 
   if (error) {
