@@ -32,7 +32,7 @@ export function BookCardActions({
       }).catch(() => setter(!value));
     };
   }
-
+  //to run deployment
   return (
     <div className="absolute top-2 left-2 flex gap-1">
       <button
