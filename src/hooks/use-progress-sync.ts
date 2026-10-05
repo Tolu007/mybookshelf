@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { sendOrQueue } from "@/lib/offline-queue";
 
 const SAVE_DEBOUNCE_MS = 1500;
 
@@ -12,13 +13,7 @@ export function useProgressSync(bookId: string) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (latestRef.current) {
-        const { location, percent } = latestRef.current;
-        fetch(`/api/books/${bookId}/progress`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ location, percent }),
-          keepalive: true,
-        }).catch(() => {});
+        sendOrQueue(`/api/books/${bookId}/progress`, "PUT", latestRef.current, { dedupe: true });
       }
     };
   }, [bookId]);
@@ -28,11 +23,7 @@ export function useProgressSync(bookId: string) {
       latestRef.current = next;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
-        fetch(`/api/books/${bookId}/progress`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(next),
-        }).catch(() => {});
+        sendOrQueue(`/api/books/${bookId}/progress`, "PUT", next, { dedupe: true });
       }, SAVE_DEBOUNCE_MS);
     },
     [bookId]

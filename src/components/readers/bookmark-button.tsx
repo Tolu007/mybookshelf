@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Bookmark, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { sendOrQueue } from "@/lib/offline-queue";
 
 export function BookmarkButton({
   bookId,
@@ -18,11 +19,10 @@ export function BookmarkButton({
   async function save() {
     setJustSaved(true);
     setTimeout(() => setJustSaved(false), 1500);
-    await fetch(`/api/books/${bookId}/annotations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "bookmark", location: getCurrentLocation() }),
-    }).catch(() => {});
+    await sendOrQueue(`/api/books/${bookId}/annotations`, "POST", {
+      type: "bookmark",
+      location: getCurrentLocation(),
+    });
     onSaved();
   }
 

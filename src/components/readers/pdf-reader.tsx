@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Highlighter, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReaderToolbar } from "@/components/readers/reader-toolbar";
 import { AnnotationsPanel } from "@/components/readers/annotations-panel";
@@ -10,6 +10,7 @@ import { AddNoteButton } from "@/components/readers/add-note-button";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
+import { sendOrQueue } from "@/lib/offline-queue";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -43,6 +44,7 @@ export function PdfReader({
   );
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFinished, setIsFinished] = useState(initialIsFinished);
+  const [highlightMode, setHighlightMode] = useState(false);
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const { elapsedSeconds } = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
@@ -204,6 +206,8 @@ export function PdfReader({
   // correctly placed at any zoom level.
   useEffect(() => {
     function onSelectionEnd() {
+      if (!highlightMode) return;
+
       const selection = window.getSelection();
       const textLayerEl = textLayerRef.current;
       const canvas = canvasRef.current;
@@ -229,18 +233,12 @@ export function PdfReader({
       selection.removeAllRanges();
       if (rects.length === 0) return;
 
-      fetch(`/api/books/${bookId}/annotations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "highlight",
-          location: String(pageNumber),
-          excerpt: excerpt.slice(0, 500),
-          rects,
-        }),
-      })
-        .then(() => setAnnotationsVersion((v) => v + 1))
-        .catch(() => {});
+      sendOrQueue(`/api/books/${bookId}/annotations`, "POST", {
+        type: "highlight",
+        location: String(pageNumber),
+        excerpt: excerpt.slice(0, 500),
+        rects,
+      }).then(() => setAnnotationsVersion((v) => v + 1));
     }
 
     document.addEventListener("mouseup", onSelectionEnd);
@@ -249,7 +247,7 @@ export function PdfReader({
       document.removeEventListener("mouseup", onSelectionEnd);
       document.removeEventListener("touchend", onSelectionEnd);
     };
-  }, [bookId, pageNumber]);
+  }, [bookId, pageNumber, highlightMode]);
 
   const goToPage = useCallback(
     (next: number) => {
@@ -322,6 +320,14 @@ export function PdfReader({
           disabled={zoomLevel >= MAX_ZOOM}
         >
           <ZoomIn />
+        </Button>
+        <Button
+          variant={highlightMode ? "default" : "ghost"}
+          size="icon-sm"
+          aria-label={highlightMode ? "Exit highlight mode" : "Enter highlight mode"}
+          onClick={() => setHighlightMode((v) => !v)}
+        >
+          <Highlighter />
         </Button>
         <BookmarkButton
           bookId={bookId}

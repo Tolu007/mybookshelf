@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { sendOrQueue } from "@/lib/offline-queue";
 import {
   Dialog,
   DialogContent,
@@ -29,15 +30,11 @@ export function AddNoteButton({
   async function save() {
     if (!text.trim()) return;
     setSaving(true);
-    await fetch(`/api/books/${bookId}/annotations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "note",
-        location: getCurrentLocation(),
-        note: text.trim(),
-      }),
-    }).catch(() => {});
+    await sendOrQueue(`/api/books/${bookId}/annotations`, "POST", {
+      type: "note",
+      location: getCurrentLocation(),
+      note: text.trim(),
+    });
     setSaving(false);
     setText("");
     setOpen(false);

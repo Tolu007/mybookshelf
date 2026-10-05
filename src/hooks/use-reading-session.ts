@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import { sendOrQueue } from "@/lib/offline-queue";
 
 const MIN_SESSION_SECONDS = 30;
 
@@ -40,19 +41,12 @@ export function useReadingSession(bookId: string) {
       const durationSeconds = Math.floor(accumulatedMsRef.current / 1000);
       if (durationSeconds < MIN_SESSION_SECONDS) return;
 
-      const payload = JSON.stringify({
+      sendOrQueue(`/api/books/${bookId}/sessions`, "POST", {
         startedAt,
         endedAt: new Date().toISOString(),
         durationSeconds,
         localDate: format(new Date(), "yyyy-MM-dd"),
       });
-
-      fetch(`/api/books/${bookId}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {});
     }
 
     window.addEventListener("blur", pause);

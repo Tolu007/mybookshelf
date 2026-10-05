@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Epub from "epubjs";
 import type { Rendition } from "epubjs";
-import { Minus, Plus } from "lucide-react";
+import { Highlighter, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReaderToolbar } from "@/components/readers/reader-toolbar";
 import { AnnotationsPanel } from "@/components/readers/annotations-panel";
@@ -11,6 +11,7 @@ import { AddNoteButton } from "@/components/readers/add-note-button";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
+import { sendOrQueue } from "@/lib/offline-queue";
 
 const MIN_FONT_PERCENT = 80;
 const MAX_FONT_PERCENT = 160;
@@ -35,11 +36,17 @@ export function EpubReader({
   const viewerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<Rendition | null>(null);
   const currentCfiRef = useRef<string | null>(initialLocation);
+  const highlightModeRef = useRef(false);
   const [isFinished, setIsFinished] = useState(initialIsFinished);
   const [fontPercent, setFontPercent] = useState(100);
+  const [highlightMode, setHighlightMode] = useState(false);
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const { elapsedSeconds } = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
+
+  useEffect(() => {
+    highlightModeRef.current = highlightMode;
+  }, [highlightMode]);
 
   useEffect(() => {
     if (!viewerRef.current) return;
@@ -91,6 +98,8 @@ export function EpubReader({
     );
 
     rendition.on("selected", (cfiRange: string, contents: { window: Window }) => {
+      if (!highlightModeRef.current) return;
+
       const selectedText = contents.window.getSelection()?.toString().trim();
       if (!selectedText) return;
 
@@ -101,17 +110,11 @@ export function EpubReader({
       });
       contents.window.getSelection()?.removeAllRanges();
 
-      fetch(`/api/books/${bookId}/annotations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "highlight",
-          location: cfiRange,
-          excerpt: selectedText.slice(0, 500),
-        }),
-      })
-        .then(() => setAnnotationsVersion((v) => v + 1))
-        .catch(() => {});
+      sendOrQueue(`/api/books/${bookId}/annotations`, "POST", {
+        type: "highlight",
+        location: cfiRange,
+        excerpt: selectedText.slice(0, 500),
+      }).then(() => setAnnotationsVersion((v) => v + 1));
     });
 
     book.ready.then(() => book.locations.generate(1600)).catch(() => {});
@@ -173,6 +176,14 @@ export function EpubReader({
         <span className="text-sm text-muted-foreground tabular-nums">{fontPercent}%</span>
         <Button variant="ghost" size="icon-sm" onClick={() => changeFontSize(FONT_STEP)}>
           <Plus />
+        </Button>
+        <Button
+          variant={highlightMode ? "default" : "ghost"}
+          size="icon-sm"
+          aria-label={highlightMode ? "Exit highlight mode" : "Enter highlight mode"}
+          onClick={() => setHighlightMode((v) => !v)}
+        >
+          <Highlighter />
         </Button>
         <BookmarkButton
           bookId={bookId}

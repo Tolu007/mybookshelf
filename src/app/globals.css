@@ -149,13 +149,27 @@
 
 /* Invisible, selectable text positioned over the PDF canvas by pdf.js's
    TextLayer — lets users select/highlight text that's really just a raster
-   image. --total-scale-factor/--min-font-size feed TextLayer's own font-size
-   calc(); without them the calc is invalid and spans fall back to an
-   unrelated size, misaligning the hit targets from the visible glyphs. */
+   image. This is pdf.js's own .textLayer contract (pdfjs-dist/web/pdf_viewer.css),
+   copied verbatim rather than reconstructed: it was hand-rolled once before and
+   silently dropped the --text-scale-factor/--min-font-size-inv derived variables
+   and the rule that applies font-size/transform to each run, which made every
+   span fall back to the browser default font size — invisibly, since the text
+   is transparent, until you select it and the hit targets are wildly wrong. */
 .pdf-text-layer {
-  --total-scale-factor: 1;
-  --min-font-size: 1;
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
   line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  transform-origin: 0 0;
+  z-index: 0;
+
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
 }
 
 .pdf-text-layer span,
@@ -165,8 +179,42 @@
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.pdf-text-layer > :not(.markedContent),
+.pdf-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-text-layer .markedContent {
+  display: contents;
+}
+
+.pdf-text-layer span[role="img"] {
+  user-select: none;
+  cursor: default;
 }
 
 .pdf-text-layer ::selection {
   background: rgba(177, 80, 46, 0.35);
+  color: transparent;
+}
+
+.pdf-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.pdf-text-layer.selecting .endOfContent {
+  top: 0;
 }
