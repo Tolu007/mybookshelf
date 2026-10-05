@@ -1,4 +1,4 @@
-import { addDays, eachDayOfInterval, format, startOfMonth, startOfWeek } from "date-fns";
+import { eachDayOfInterval, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 
 export type SessionRow = { local_date: string; duration_seconds: number };
 
@@ -6,6 +6,7 @@ export type HeatCell = {
   date: string;
   minutes: number;
   level: 0 | 1 | 2 | 3 | 4 | 5;
+  inYear: boolean;
 };
 
 export function sumMinutes(rows: SessionRow[], fromDate?: string) {
@@ -33,37 +34,68 @@ export function minutesToHeatLevel(minutes: number): HeatCell["level"] {
   return 5;
 }
 
-export function buildHeatmapWeeks(dailyMinutes: Map<string, number>, weeks = 12) {
-  const today = new Date();
-  const start = addDays(today, -(weeks * 7 - 1));
-  const gridStart = startOfWeek(start, { weekStartsOn: 0 });
-  const days = eachDayOfInterval({ start: gridStart, end: today });
+// A GitHub-style contribution graph for the whole calendar year: columns are
+// weeks (Jan 1 through Dec 31, padded to complete weeks), rows are days.
+// Days outside the target year (the padding) are marked `inYear: false` so
+// the component can render them as blank rather than a false "0 minutes".
+export function buildYearHeatmapWeeks(dailyMinutes: Map<string, number>, year: number) {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  const gridStart = startOfWeek(yearStart, { weekStartsOn: 0 });
+  const gridEnd = endOfWeek(yearEnd, { weekStartsOn: 0 });
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
   const cells: HeatCell[] = days.map((date) => {
     const key = format(date, "yyyy-MM-dd");
     const minutes = dailyMinutes.get(key) ?? 0;
-    return { date: key, minutes, level: minutesToHeatLevel(minutes) };
+    return {
+      date: key,
+      minutes,
+      level: minutesToHeatLevel(minutes),
+      inYear: date.getFullYear() === year,
+    };
   });
 
-  const columns: (HeatCell | null)[][] = [];
+  const columns: HeatCell[][] = [];
   for (let i = 0; i < cells.length; i += 7) {
-    const chunk: (HeatCell | null)[] = cells.slice(i, i + 7);
-    while (chunk.length < 7) chunk.push(null);
-    columns.push(chunk);
+    columns.push(cells.slice(i, i + 7));
   }
-  return columns;
-}
 
-export function buildDailyBars(dailyMinutes: Map<string, number>, days = 30) {
-  const today = new Date();
-  return eachDayOfInterval({ start: addDays(today, -(days - 1)), end: today }).map((date) => {
-    const key = format(date, "yyyy-MM-dd");
-    return { date: key, minutes: Math.round(dailyMinutes.get(key) ?? 0) };
+  // The column index (and label) of each month's first week, so the
+  // component can print "Jan Feb Mar …" above the right columns.
+  const monthMarkers: { column: number; label: string }[] = [];
+  let lastMonth = -1;
+  columns.forEach((column, index) => {
+    const firstInYearCell = column.find((cell) => cell.inYear);
+    if (!firstInYearCell) return;
+    const month = new Date(firstInYearCell.date).getMonth();
+    if (month !== lastMonth) {
+      monthMarkers.push({ column: index, label: format(new Date(firstInYearCell.date), "MMM") });
+      lastMonth = month;
+    }
   });
+
+  return { columns, monthMarkers };
 }
 
-export function weekStartIso() {
-  return format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+// Jan-Dec totals for the target year, in minutes.
+export function buildMonthlyTotals(dailyMinutes: Map<string, number>, year: number) {
+  const totals = Array.from({ length: 12 }, () => 0);
+  for (const [dateKey, minutes] of dailyMinutes) {
+    const date = new Date(`${dateKey}T00:00:00`);
+    if (date.getFullYear() === year) {
+      totals[date.getMonth()] += minutes;
+    }
+  }
+  return totals.map((minutes, month) => ({
+    month,
+    label: format(new Date(year, month, 1), "MMM"),
+    minutes: Math.round(minutes),
+  }));
+}
+
+export function yearStartIso(year: number) {
+  return format(new Date(year, 0, 1), "yyyy-MM-dd");
 }
 
 export function monthStartIso() {
