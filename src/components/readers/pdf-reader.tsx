@@ -16,6 +16,7 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.2;
 const CONTAINER_PADDING = 32; // matches the p-4 wrapper around the canvas
+const SWIPE_MIN_DISTANCE = 60;
 
 type Rect = { x: number; y: number; width: number; height: number };
 type HighlightAnnotation = { type: string; location: string; rects: Rect[] | null };
@@ -257,6 +258,33 @@ export function PdfReader({
     [numPages]
   );
 
+  // Swipe to turn pages — only at the default fit-width zoom, and never
+  // while highlight mode is on, so it can't hijack a pinch-zoom gesture, a
+  // pan across a zoomed-in page, or a text-selection drag.
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function onTouchStart(event: React.TouchEvent) {
+    if (highlightMode || zoomLevel !== 1 || event.touches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
+    touchStartRef.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }
+
+  function onTouchEnd(event: React.TouchEvent) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+
+    if (Math.abs(dx) > SWIPE_MIN_DISTANCE && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      goToPage(dx < 0 ? pageNumber + 1 : pageNumber - 1);
+    }
+  }
+
   function changeZoom(delta: number) {
     setZoomLevel((z) => Math.round(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + delta)) * 100) / 100);
   }
@@ -348,11 +376,25 @@ export function PdfReader({
       <div
         ref={containerRef}
         className="flex flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
       >
         <div className="relative">
           <canvas ref={canvasRef} className="rounded-sm shadow-lg" />
           <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
           <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
+          <button
+            type="button"
+            aria-label="Previous page"
+            className="absolute inset-y-0 left-0 z-20 w-12 cursor-w-resize"
+            onClick={() => goToPage(pageNumber - 1)}
+          />
+          <button
+            type="button"
+            aria-label="Next page"
+            className="absolute inset-y-0 right-0 z-20 w-12 cursor-e-resize"
+            onClick={() => goToPage(pageNumber + 1)}
+          />
         </div>
       </div>
     </div>

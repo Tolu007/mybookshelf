@@ -3,7 +3,7 @@
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { BarChart3, Bookmark, CheckCircle2, Heart, LibraryBig } from "lucide-react";
+import { BarChart3, Bookmark, CheckCircle2, Heart, LibraryBig, NotebookPen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SHELVES: { key: string; label: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -68,6 +68,10 @@ export function SidebarNav({
         <NavLink href="/stats" active={pathname === "/stats"}>
           <BarChart3 className="size-4" />
           Stats
+        </NavLink>
+        <NavLink href="/journal" active={pathname === "/journal"}>
+          <NotebookPen className="size-4" />
+          Journal
         </NavLink>
       </div>
 
