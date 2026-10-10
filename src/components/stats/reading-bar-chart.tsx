@@ -11,18 +11,18 @@ export function ReadingBarChart({
   const max = Math.max(1, ...months.map((month) => month.minutes));
 
   return (
-    <div className="space-y-1">
+    <div className="min-w-120 space-y-3">
       <div className="flex items-end gap-2">
         {months.map((month) => (
           <div key={month.month} className="flex flex-1 flex-col items-center">
             <span className="h-4 text-xs text-muted-foreground tabular-nums">
               {month.minutes > 0 ? formatMinutes(month.minutes) : ""}
             </span>
-            <div className="flex h-32 w-full items-end justify-center">
+            <div className="mt-2 flex h-44 w-full items-end justify-center border-b border-border">
               <div
                 title={`${month.label}: ${formatMinutes(month.minutes)}`}
-                className="w-full max-w-10 rounded-t-xs bg-primary/80 transition-colors hover:bg-primary"
-                style={{ height: `${Math.max(2, (month.minutes / max) * 100)}%` }}
+                className="w-full max-w-10 rounded-t-md bg-primary/75 transition-colors hover:bg-primary"
+                style={{ height: `${(month.minutes / max) * 100}%` }}
               />
             </div>
           </div>

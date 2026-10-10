@@ -189,6 +189,8 @@ export function EpubReader({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
       if (event.key === "ArrowRight") renditionRef.current?.next();
       if (event.key === "ArrowLeft") renditionRef.current?.prev();
     }
@@ -209,17 +211,18 @@ export function EpubReader({
         isFinished={isFinished}
         onMarkFinished={markFinished}
       >
-        <Button variant="ghost" size="icon-sm" onClick={() => changeFontSize(-FONT_STEP)}>
+        <Button variant="ghost" size="icon-sm" aria-label="Decrease font size" disabled={fontPercent <= MIN_FONT_PERCENT} onClick={() => changeFontSize(-FONT_STEP)}>
           <Minus />
         </Button>
         <span className="text-sm text-muted-foreground tabular-nums">{fontPercent}%</span>
-        <Button variant="ghost" size="icon-sm" onClick={() => changeFontSize(FONT_STEP)}>
+        <Button variant="ghost" size="icon-sm" aria-label="Increase font size" disabled={fontPercent >= MAX_FONT_PERCENT} onClick={() => changeFontSize(FONT_STEP)}>
           <Plus />
         </Button>
         <Button
           variant={highlightMode ? "default" : "ghost"}
           size="icon-sm"
           aria-label={highlightMode ? "Exit highlight mode" : "Enter highlight mode"}
+          aria-pressed={highlightMode}
           onClick={() => setHighlightMode((v) => !v)}
         >
           <Highlighter />
@@ -240,7 +243,7 @@ export function EpubReader({
           onJumpTo={(location) => renditionRef.current?.display(location)}
         />
       </ReaderToolbar>
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         <button
           type="button"
           aria-label="Previous page"

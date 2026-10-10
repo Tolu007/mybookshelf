@@ -291,6 +291,8 @@ export function PdfReader({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
       if (event.key === "ArrowRight") goToPage(pageNumber + 1);
       if (event.key === "ArrowLeft") goToPage(pageNumber - 1);
     }
@@ -314,6 +316,7 @@ export function PdfReader({
         <Button
           variant="ghost"
           size="icon-sm"
+          aria-label="Previous page"
           onClick={() => goToPage(pageNumber - 1)}
           disabled={pageNumber <= 1}
         >
@@ -325,6 +328,7 @@ export function PdfReader({
         <Button
           variant="ghost"
           size="icon-sm"
+          aria-label="Next page"
           onClick={() => goToPage(pageNumber + 1)}
           disabled={numPages > 0 && pageNumber >= numPages}
         >
@@ -333,6 +337,7 @@ export function PdfReader({
         <Button
           variant="ghost"
           size="icon-sm"
+          aria-label="Zoom out"
           onClick={() => changeZoom(-ZOOM_STEP)}
           disabled={zoomLevel <= MIN_ZOOM}
         >
@@ -344,6 +349,7 @@ export function PdfReader({
         <Button
           variant="ghost"
           size="icon-sm"
+          aria-label="Zoom in"
           onClick={() => changeZoom(ZOOM_STEP)}
           disabled={zoomLevel >= MAX_ZOOM}
         >
@@ -353,6 +359,7 @@ export function PdfReader({
           variant={highlightMode ? "default" : "ghost"}
           size="icon-sm"
           aria-label={highlightMode ? "Exit highlight mode" : "Enter highlight mode"}
+          aria-pressed={highlightMode}
           onClick={() => setHighlightMode((v) => !v)}
         >
           <Highlighter />
@@ -375,7 +382,7 @@ export function PdfReader({
       </ReaderToolbar>
       <div
         ref={containerRef}
-        className="flex flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
+        className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >

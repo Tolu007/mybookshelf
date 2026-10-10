@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -50,23 +50,23 @@
 
 :root {
   /* Warm & literary (light) */
-  --background: oklch(0.975 0.012 75);
-  --foreground: oklch(0.24 0.025 50);
+  --background: #f7f6f2;
+  --foreground: #292d27;
   --card: oklch(0.99 0.008 75);
   --card-foreground: oklch(0.24 0.025 50);
   --popover: oklch(0.99 0.008 75);
   --popover-foreground: oklch(0.24 0.025 50);
-  --primary: oklch(0.53 0.14 36);
+  --primary: #a34f36;
   --primary-foreground: oklch(0.98 0.01 75);
   --secondary: oklch(0.93 0.018 72);
   --secondary-foreground: oklch(0.24 0.025 50);
   --muted: oklch(0.93 0.015 72);
-  --muted-foreground: oklch(0.5 0.025 55);
-  --accent: oklch(0.91 0.03 55);
-  --accent-foreground: oklch(0.3 0.04 40);
+  --muted-foreground: #626b5e;
+  --accent: #e4e9df;
+  --accent-foreground: #354d3d;
   --destructive: oklch(0.577 0.22 27);
-  --border: oklch(0.88 0.018 70);
-  --input: oklch(0.88 0.018 70);
+  --border: #e3e3da;
+  --input: #ddddd3;
   --ring: oklch(0.53 0.14 36 / 50%);
   --chart-1: oklch(0.53 0.14 36);
   --chart-2: oklch(0.62 0.12 75);
@@ -74,13 +74,13 @@
   --chart-4: oklch(0.6 0.1 230);
   --chart-5: oklch(0.55 0.08 300);
   --radius: 0.75rem;
-  --sidebar: oklch(0.96 0.015 75);
+  --sidebar: #efefe8;
   --sidebar-foreground: oklch(0.24 0.025 50);
   --sidebar-primary: oklch(0.53 0.14 36);
   --sidebar-primary-foreground: oklch(0.98 0.01 75);
-  --sidebar-accent: oklch(0.91 0.03 55);
-  --sidebar-accent-foreground: oklch(0.3 0.04 40);
-  --sidebar-border: oklch(0.88 0.018 70);
+  --sidebar-accent: #e4e9df;
+  --sidebar-accent-foreground: #354d3d;
+  --sidebar-border: #e3e3da;
   --sidebar-ring: oklch(0.53 0.14 36 / 50%);
 
   /* Sequential ramp for the streak heatmap: more reading = darker, in light mode. */
@@ -94,19 +94,19 @@
 
 .dark {
   /* Dark-first editorial */
-  --background: oklch(0.19 0.012 50);
-  --foreground: oklch(0.95 0.012 70);
-  --card: oklch(0.23 0.014 50);
-  --card-foreground: oklch(0.95 0.012 70);
-  --popover: oklch(0.23 0.014 50);
+  --background: #181e1a;
+  --foreground: #eeeae1;
+  --card: #202822;
+  --card-foreground: #eeeae1;
+  --popover: #202822;
   --popover-foreground: oklch(0.95 0.012 70);
   --primary: oklch(0.72 0.17 35);
   --primary-foreground: oklch(0.19 0.012 50);
   --secondary: oklch(0.29 0.015 50);
   --secondary-foreground: oklch(0.95 0.012 70);
   --muted: oklch(0.27 0.014 50);
-  --muted-foreground: oklch(0.68 0.02 60);
-  --accent: oklch(0.32 0.03 40);
+  --muted-foreground: #a5afa1;
+  --accent: #303e32;
   --accent-foreground: oklch(0.95 0.012 70);
   --destructive: oklch(0.69 0.2 25);
   --border: oklch(1 0 0 / 10%);
@@ -117,11 +117,11 @@
   --chart-3: oklch(0.7 0.12 160);
   --chart-4: oklch(0.72 0.11 230);
   --chart-5: oklch(0.72 0.1 300);
-  --sidebar: oklch(0.21 0.013 50);
+  --sidebar: #1d251f;
   --sidebar-foreground: oklch(0.95 0.012 70);
   --sidebar-primary: oklch(0.72 0.17 35);
   --sidebar-primary-foreground: oklch(0.19 0.012 50);
-  --sidebar-accent: oklch(0.32 0.03 40);
+  --sidebar-accent: #303e32;
   --sidebar-accent-foreground: oklch(0.95 0.012 70);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.72 0.17 35 / 50%);
@@ -144,7 +144,50 @@
   }
   html {
     @apply font-sans;
+    color-scheme: light;
   }
+  html.dark { color-scheme: dark; }
+  ::selection { background: #a34f3628; }
+}
+
+@layer utilities {
+  .page-shell { @apply mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:px-12 lg:py-10; }
+  .eyebrow { @apply text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase; }
+  .surface { @apply rounded-2xl border border-border bg-card; }
+}
+
+.book-jacket {
+  container-type: inline-size;
+  box-shadow: inset 2px 0 3px #ffffff25, inset -1px 0 2px #00000018, 5px 8px 16px #1f2d2924;
+}
+.book-jacket::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, #00000018 0, #ffffff25 2%, #00000008 4%, transparent 7%);
+  border-radius: inherit;
+}
+.reading-art { position: relative; width: 230px; height: 190px; }
+.reading-art > div {
+  position: absolute;
+  width: 104px;
+  height: 147px;
+  border-radius: 3px 8px 8px 3px;
+  padding: 18px 14px;
+  color: #f3eee1;
+  box-shadow: inset 4px 0 #ffffff15, 8px 12px 22px #1d302426;
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+.reading-art > div:nth-child(1) { background: #a75941; left: 4px; top: 27px; transform: rotate(-16deg); }
+.reading-art > div:nth-child(2) { background: #b49662; left: 70px; top: 7px; transform: rotate(-3deg); }
+.reading-art > div:nth-child(3) { background: #374f43; left: 126px; top: 29px; transform: rotate(12deg); }
+.reading-art span { display: block; margin-top: 9px; font-size: 17px; line-height: 1.18; }
+.reading-art small { font-family: var(--font-geist-sans), sans-serif; font-size: 7px; letter-spacing: 2px; text-transform: uppercase; }
+.reading-art i { display: block; width: 25px; height: 25px; margin-top: 17px; border: 1px solid #f3eee155; border-radius: 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
 /* Invisible, selectable text positioned over the PDF canvas by pdf.js's

@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { Input } from "@/components/ui/input";
 import { AddBookDialog } from "@/components/add-book-dialog";
 import { BookCard } from "@/components/book-card";
+import { LibraryCollection } from "@/components/library-collection";
+import { ReadingHero } from "@/components/reading-hero";
+import { PageHeader } from "@/components/page-header";
+import { BookOpen, Search, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -105,18 +111,28 @@ export default async function LibraryPage({
   const pageTitle = query
     ? `Results for "${query}"`
     : categoryFilter
-      ? (categories?.find((c) => c.id === categoryFilter)?.name ?? "Library")
+      ? (categories?.find((c) => c.id === categoryFilter)?.name ?? "My library")
       : shelfFilter
         ? (SHELF_TITLES[shelfFilter] ?? "Library")
-        : "Library";
+        : "My library";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-10 px-6 py-8">
-      {continueReading.length > 0 && (
+    <div className="page-shell space-y-8">
+      <PageHeader eyebrow="Your reading space" title={pageTitle} description={query ? "A familiar favorite or a new perspective. Find it here." : "Good books, collected. A world of ideas, always within reach."} action={<AddBookDialog categories={categories ?? []} />} />
+      <form action="/" method="get" role="search" className="relative max-w-lg">
+        {shelfFilter && <input type="hidden" name="shelf" value={shelfFilter} />}
+        {categoryFilter && <input type="hidden" name="category" value={categoryFilter} />}
+        <label htmlFor="library-search" className="sr-only">Search by title or author</label>
+        <Search className="pointer-events-none absolute top-3 left-3.5 size-4 text-muted-foreground" aria-hidden="true" />
+        <Input id="library-search" type="search" name="q" placeholder="Find your next chapter…" defaultValue={query ?? ""} className="h-11 bg-card pr-12 pl-10" />
+        <button type="submit" aria-label="Search library" className="absolute top-1 right-1 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><ArrowRight className="size-4" /></button>
+      </form>
+      {showContinueReading && <ReadingHero current={continueReading[0]} />}
+      {continueReading.length > 1 && (
         <section className="space-y-4">
-          <h2 className="font-heading text-lg">Continue reading</h2>
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {continueReading.map((row) => (
+          <div className="flex items-center justify-between"><h2 className="font-heading text-xl tracking-tight">On your nightstand</h2><Link href="/?shelf=reading" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">See all <ArrowRight className="size-3" /></Link></div>
+          <div className="grid auto-cols-[160px] grid-flow-col gap-5 overflow-x-auto pb-3 sm:auto-cols-[180px]">
+            {continueReading.slice(1).map((row) => (
               <BookCard
                 key={row.book.id}
                 book={row.book}
@@ -128,38 +144,22 @@ export default async function LibraryPage({
         </section>
       )}
 
-      <section className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="font-heading text-2xl">{pageTitle}</h1>
-          <div className="flex items-center gap-3">
-            <form action="/" method="get">
-              {shelfFilter && <input type="hidden" name="shelf" value={shelfFilter} />}
-              {categoryFilter && <input type="hidden" name="category" value={categoryFilter} />}
-              <Input
-                type="search"
-                name="q"
-                placeholder="Search title or author…"
-                defaultValue={query ?? ""}
-                className="w-48 sm:w-56"
-              />
-            </form>
-            <AddBookDialog categories={categories ?? []} />
-          </div>
-        </div>
+      <section aria-label="Book collection" className="space-y-6">
+        <nav aria-label="Filter books by shelf" className="flex gap-5 overflow-x-auto border-b border-border">
+          {[{ key: "", label: "All books" }, { key: "reading", label: "Reading" }, { key: "want_to_read", label: "Want to read" }, { key: "finished", label: "Finished" }, { key: "favorites", label: "Favorites" }].map((item) => (
+            <Link key={item.key} href={{ pathname: "/", query: { ...(item.key ? { shelf: item.key } : {}), ...(categoryFilter ? { category: categoryFilter } : {}), ...(query ? { q: query } : {}) } }} aria-current={(shelfFilter ?? "") === item.key ? "page" : undefined} className={cn("shrink-0 border-b-2 px-0.5 pb-3 text-xs transition-colors", (shelfFilter ?? "") === item.key ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>{item.label}</Link>
+          ))}
+        </nav>
 
         {!books?.length ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-24 text-center">
-            <h2 className="font-heading text-xl">Nothing here yet</h2>
-            <p className="max-w-sm text-muted-foreground">
-              {query ? `No books match "${query}".` : "Add a book to see it here."}
-            </p>
+          <div className="surface flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+            <span className="mb-2 flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground"><BookOpen className="size-6" strokeWidth={1.5} aria-hidden="true" /></span>
+            <h2 className="font-heading text-2xl">{query ? "No matching chapters" : shelfFilter || categoryFilter ? "A shelf waiting to be filled" : "Every library starts with one book"}</h2>
+            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{query ? `No books match "${query}". Try another title or author.` : shelfFilter || categoryFilter ? "Books you add to this collection will find their home here." : "Bring a PDF or EPUB you love. We'll keep your place, and the thoughts you find along the way."}</p>
+            <div className="mt-3">{query || shelfFilter || categoryFilter ? <Link href="/" className="text-sm font-medium text-primary hover:underline">Back to all books</Link> : <AddBookDialog categories={categories ?? []} />}</div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {books.map((book) => (
-              <BookCard key={book.id} book={book} categories={categories ?? []} />
-            ))}
-          </div>
+          <LibraryCollection books={books} categories={categories ?? []} />
         )}
       </section>
     </div>

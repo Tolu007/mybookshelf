@@ -2,39 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-
-const STORAGE_KEY = "shelf-theme";
+import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState<boolean | null>(null);
-
   useEffect(() => {
-    // One-time client-only read to avoid a server/client mismatch — the
-    // inline script in layout.tsx already set the real class before paint.
+    // Read after mount; the root's inline script applies the theme before paint.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
-  if (isDark === null) {
-    return <div className="size-6" aria-hidden />;
-  }
-
-  function toggle(next: boolean) {
+  function toggle() {
+    const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
+    try { localStorage.setItem("shelf-theme", next ? "dark" : "light"); } catch { /* The theme still works when storage is unavailable. */ }
   }
 
   return (
-    <label className="flex items-center gap-2">
-      <Sun className="size-4 text-muted-foreground" aria-hidden />
-      <Switch
-        checked={isDark}
-        onCheckedChange={toggle}
-        aria-label="Toggle dark mode"
-      />
-      <Moon className="size-4 text-muted-foreground" aria-hidden />
-    </label>
+    <Button variant="ghost" className="w-full justify-start gap-3 px-3 text-xs text-muted-foreground" onClick={toggle} disabled={isDark === null} aria-label="Toggle dark mode" aria-pressed={isDark ?? false}>
+      {isDark ? <Moon /> : <Sun />}
+      {isDark ? "Dark appearance" : "Light appearance"}
+      <span className="ml-auto text-[10px]">Switch</span>
+    </Button>
   );
 }

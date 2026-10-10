@@ -28,11 +28,6 @@ type EditableBook = {
   category_id: string | null;
 };
 
-function stop(event: React.SyntheticEvent) {
-  event.preventDefault();
-  event.stopPropagation();
-}
-
 export function BookCardMenu({
   book,
   categories,
@@ -74,16 +69,14 @@ export function BookCardMenu({
               size="icon-sm"
               aria-label="Book options"
               className="bg-background/85 backdrop-blur-sm"
-              onClick={stop}
             />
           }
         >
           <MoreVertical />
         </DropdownMenuTrigger>
-        <DropdownMenuContent onClick={stop}>
+        <DropdownMenuContent>
           <DropdownMenuItem
-            onClick={(event) => {
-              stop(event);
+            onClick={() => {
               setEditOpen(true);
             }}
           >
@@ -91,8 +84,7 @@ export function BookCardMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
-            onClick={(event) => {
-              stop(event);
+            onClick={() => {
               setConfirmOpen(true);
             }}
           >
@@ -109,7 +101,7 @@ export function BookCardMenu({
       />
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent onClick={stop}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete &ldquo;{book.title}&rdquo;?</DialogTitle>
             <DialogDescription>

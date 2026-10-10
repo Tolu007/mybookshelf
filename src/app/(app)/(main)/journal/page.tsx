@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { JournalList } from "@/components/journal/journal-list";
 import { NewNoteDialog } from "@/components/journal/new-note-dialog";
+import { PageHeader } from "@/components/page-header";
+import { NotebookPen } from "lucide-react";
 
 type NoteRow = {
   id: string;
@@ -52,17 +54,9 @@ export default async function JournalPage() {
     }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 px-6 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl">Journal</h1>
-          <p className="text-muted-foreground">
-            Every note you've written across your books, in one place.
-          </p>
-        </div>
-        <NewNoteDialog booksInProgress={booksInProgress} />
-      </div>
-
+    <div className="page-shell space-y-8">
+      <PageHeader eyebrow="Thoughts from the margins" title="Between the lines." description="The ideas that linger. The questions that matter. Your reading, in your own words." action={<NewNoteDialog booksInProgress={booksInProgress} />} />
+      <div className="flex items-center justify-between border-b border-border pb-4"><h2 className="flex items-center gap-2 text-xs font-medium"><NotebookPen className="size-3.5 text-primary" aria-hidden="true" /> Your notes <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{journalNotes.length}</span></h2><span className="text-[10px] text-muted-foreground">Most recent first</span></div>
       <JournalList initialNotes={journalNotes} />
     </div>
   );

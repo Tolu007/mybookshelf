@@ -165,10 +165,10 @@ export function AddBookDialog({ categories }: { categories: { id: string; name: 
       <DialogContent>
         <form ref={formRef} onSubmit={onSubmit} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>Add a book</DialogTitle>
+            <DialogTitle>A new chapter awaits</DialogTitle>
             <DialogDescription>
-              Uploads straight to your Drive&apos;s &ldquo;Shelf Library&rdquo; folder — any
-              file size.
+              Choose a PDF or EPUB. We&apos;ll give it a home in your library
+              and your Drive&apos;s &ldquo;Shelf Library&rdquo; folder.
             </DialogDescription>
           </DialogHeader>
 
@@ -236,7 +236,7 @@ export function AddBookDialog({ categories }: { categories: { id: string; name: 
             </div>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting || isReadingCover}>

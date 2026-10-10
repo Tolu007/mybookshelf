@@ -25,11 +25,12 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+        "flex min-h-10 items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         active
-          ? "bg-accent font-medium text-accent-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
       )}
     >
       {children}
@@ -39,7 +40,7 @@ function NavLink({
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="px-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+    <p className="mb-2 px-3 text-[9px] font-semibold tracking-[0.17em] text-muted-foreground uppercase">
       {children}
     </p>
   );
@@ -59,15 +60,15 @@ export function SidebarNav({
   const onLibraryRoute = pathname === "/";
 
   return (
-    <nav className="flex flex-1 flex-col gap-6 overflow-y-auto" onClick={onNavigate}>
+    <nav aria-label="Your library" className="flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto" onClick={onNavigate}>
       <div className="space-y-0.5">
         <NavLink href="/" active={onLibraryRoute && !shelf && !category}>
           <LibraryBig className="size-4" />
-          Library
+          My library
         </NavLink>
         <NavLink href="/stats" active={pathname === "/stats"}>
           <BarChart3 className="size-4" />
-          Stats
+          Reading stats
         </NavLink>
         <NavLink href="/journal" active={pathname === "/journal"}>
           <NotebookPen className="size-4" />
