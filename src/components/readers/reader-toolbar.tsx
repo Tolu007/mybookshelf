@@ -29,12 +29,10 @@ export function ReaderToolbar({
           </Link>
           <div className="min-w-0"><p className="eyebrow hidden sm:block">In the pages</p><h1 className="truncate font-heading text-base tracking-tight sm:text-xl">{title}</h1></div>
         </div>
-        <div className="flex shrink-0 items-center gap-4">
-          {minutes > 0 && (
-            <span className="hidden items-center gap-1.5 text-[10px] text-muted-foreground tabular-nums sm:flex">
-              <Clock3 className="size-3" aria-hidden="true" /> {minutes}m this session
-            </span>
-          )}
+        <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+          <span className="flex items-center gap-1.5 text-[10px] whitespace-nowrap text-muted-foreground tabular-nums">
+            <Clock3 className="size-3" aria-hidden="true" /> {minutes}m this session
+          </span>
           <Button variant={isFinished ? "secondary" : "outline"} size="sm" onClick={onMarkFinished} disabled={isFinished}>
             <Check /> {isFinished ? "Finished" : "Finish book"}
           </Button>
