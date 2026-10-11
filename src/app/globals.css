@@ -84,12 +84,13 @@
   --sidebar-ring: oklch(0.53 0.14 36 / 50%);
 
   /* Sequential ramp for the streak heatmap: more reading = darker, in light mode. */
-  --heat-0: var(--muted);
-  --heat-1: oklch(0.88 0.05 36);
-  --heat-2: oklch(0.76 0.09 36);
-  --heat-3: oklch(0.64 0.12 36);
-  --heat-4: oklch(0.53 0.14 36);
-  --heat-5: oklch(0.42 0.15 36);
+  --heat-0: #e0e5db;
+  --heat-1: #73996c;
+  --heat-2: #5b8254;
+  --heat-3: #446c3e;
+  --heat-4: #32562d;
+  --heat-5: #244421;
+  --heat-border: #292d2726;
 }
 
 .dark {
@@ -127,12 +128,13 @@
   --sidebar-ring: oklch(0.72 0.17 35 / 50%);
 
   /* Flipped anchor: more reading = brighter, so it still reads against the dark surface. */
-  --heat-0: var(--muted);
-  --heat-1: oklch(0.32 0.06 35);
-  --heat-2: oklch(0.45 0.1 35);
-  --heat-3: oklch(0.58 0.13 35);
-  --heat-4: oklch(0.72 0.17 35);
-  --heat-5: oklch(0.8 0.16 35);
+  --heat-0: #374239;
+  --heat-1: #64875d;
+  --heat-2: #7ca16e;
+  --heat-3: #97bb83;
+  --heat-4: #b2d29b;
+  --heat-5: #d3e9bc;
+  --heat-border: #eeeae126;
 }
 
 @layer base {

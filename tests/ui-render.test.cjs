@@ -139,6 +139,23 @@ test("reader toolbar retains back navigation, reading controls, and finished sta
 test("zero reading data does not draw positive bars", () => {
   const html = render(h(ReadingBarChart, { dailyMinutes: new Map(), year: 2026 }));
   assert.equal((html.match(/height:0%/g) ?? []).length, 12);
+  assert.match(html, />Hours</);
+  assert.doesNotMatch(html, /NaN|Infinity/);
+});
+
+test("monthly chart converts minutes to hours and scales bars against the labeled axis", () => {
+  const html = render(h(ReadingBarChart, {
+    dailyMinutes: new Map([["2026-01-01", 120], ["2026-02-01", 240]]),
+    year: 2026,
+  }));
+  for (const hours of [0, 1, 2, 3, 4]) {
+    assert.match(html, new RegExp(`>${hours}</span>`));
+  }
+  assert.match(html, /title="Jan: 2h 0m"[^>]*height:50%/);
+  assert.match(html, /title="Feb: 4h 0m"[^>]*height:100%/);
+  const large = render(h(ReadingBarChart, { dailyMinutes: new Map([["2026-01-01", 7500]]), year: 2026 }));
+  assert.match(large, />200<\/span>/);
+  assert.match(large, /title="Jan: 125h 0m"[^>]*height:62.5%/);
 });
 
 test("sign-in screen renders without credentials and retains its Google action", () => {

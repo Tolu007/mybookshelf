@@ -34,8 +34,11 @@ export function StreakHeatmap({
                 <div
                   key={cell.date}
                   title={`${cell.date}: ${Math.round(cell.minutes)} min`}
-                  className="size-3 rounded-xs"
-                  style={{ backgroundColor: `var(${LEVEL_VAR[cell.level]})` }}
+                  className="size-3 rounded-xs border"
+                  style={{
+                    backgroundColor: `var(${LEVEL_VAR[cell.level]})`,
+                    borderColor: "var(--heat-border)",
+                  }}
                 />
               ) : (
                 <div key={dayIndex} className="size-3" />
@@ -49,8 +52,8 @@ export function StreakHeatmap({
         {LEVEL_VAR.map((levelVar) => (
           <div
             key={levelVar}
-            className="size-3 rounded-xs"
-            style={{ backgroundColor: `var(${levelVar})` }}
+            className="size-3 rounded-xs border"
+            style={{ backgroundColor: `var(${levelVar})`, borderColor: "var(--heat-border)" }}
           />
         ))}
         <span>More</span>
