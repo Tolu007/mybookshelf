@@ -11,6 +11,8 @@ import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
+import { downloadBook, INITIAL_READER_LOAD, readerErrorMessage, type ReaderLoadState } from "@/lib/book-download";
+import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -47,34 +49,49 @@ export function PdfReader({
   const [isFinished, setIsFinished] = useState(initialIsFinished);
   const [highlightMode, setHighlightMode] = useState(false);
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
+  const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const { elapsedSeconds } = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    let loadingTask: ReturnType<typeof import("pdfjs-dist").getDocument> | undefined;
 
     async function load() {
+      const bytes = await downloadBook(bookId, controller.signal, (state) => {
+        if (!cancelled) setLoadState(state);
+      });
       const pdfjsLib = await import("pdfjs-dist");
+      if (cancelled) return;
       pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
         "pdfjs-dist/build/pdf.worker.min.mjs",
         import.meta.url
       ).toString();
 
-      const pdf = await pdfjsLib.getDocument({ url: `/api/books/${bookId}/file` }).promise;
+      loadingTask = pdfjsLib.getDocument({ data: bytes });
+      const pdf = await loadingTask.promise;
       if (cancelled) {
         pdf.loadingTask.destroy();
         return;
       }
       pdfRef.current = pdf;
+      setPageNumber((page) => Math.min(Math.max(1, page), pdf.numPages));
       setNumPages(pdf.numPages);
     }
 
-    load();
+    load().catch((error) => {
+      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+    });
     return () => {
       cancelled = true;
-      pdfRef.current?.loadingTask.destroy();
+      controller.abort();
+      renderTaskRef.current?.cancel();
+      void loadingTask?.destroy();
+      pdfRef.current = null;
     };
-  }, [bookId]);
+  }, [bookId, loadAttempt]);
 
   const loadHighlights = useCallback(async () => {
     const response = await fetch(`/api/books/${bookId}/annotations`);
@@ -117,69 +134,80 @@ export function PdfReader({
       const textLayerEl = textLayerRef.current;
       if (!pdf || !canvas || !container || !textLayerEl) return;
 
-      const pdfjsLib = await import("pdfjs-dist");
-      const pdfPage = await pdf.getPage(page);
-      const nativeViewport = pdfPage.getViewport({ scale: 1 });
-      const availableWidth = container.clientWidth - CONTAINER_PADDING;
-      const fitScale = Math.max(0.1, availableWidth / nativeViewport.width);
-      const displayScale = fitScale * zoomLevel;
-      const dpr = window.devicePixelRatio || 1;
-
-      const renderViewport = pdfPage.getViewport({ scale: displayScale * dpr });
-      const cssViewport = pdfPage.getViewport({ scale: displayScale });
-
-      canvas.width = renderViewport.width;
-      canvas.height = renderViewport.height;
-      canvas.style.width = `${cssViewport.width}px`;
-      canvas.style.height = `${cssViewport.height}px`;
-
-      // A zoom change or page turn can fire before the previous render of
-      // this canvas finishes — pdf.js throws if two renders overlap, so
-      // cancel whatever's in flight before starting a new one.
-      renderTaskRef.current?.cancel();
-      const task = pdfPage.render({ canvas, viewport: renderViewport });
-      renderTaskRef.current = task;
       try {
-        await task.promise;
-      } catch {
-        return;
-      } finally {
-        if (renderTaskRef.current === task) renderTaskRef.current = null;
-      }
+        const pdfjsLib = await import("pdfjs-dist");
+        const pdfPage = await pdf.getPage(page);
+        if (pdfRef.current !== pdf) return;
+        const nativeViewport = pdfPage.getViewport({ scale: 1 });
+        const availableWidth = container.clientWidth - CONTAINER_PADDING;
+        const fitScale = Math.max(0.1, availableWidth / nativeViewport.width);
+        const displayScale = fitScale * zoomLevel;
+        const dpr = window.devicePixelRatio || 1;
 
-      textLayerEl.innerHTML = "";
-      // pdf.js scales each span's font size by --total-scale-factor relative
-      // to a size-1 base height, and sizes the layer itself via a round()
-      // that needs --scale-round-x/y — without these the whole calc chain
-      // is invalid and text collapses to the wrong size and position.
-      textLayerEl.style.setProperty("--total-scale-factor", String(cssViewport.scale));
-      textLayerEl.style.setProperty("--scale-round-x", "1px");
-      textLayerEl.style.setProperty("--scale-round-y", "1px");
-      const textContent = await pdfPage.getTextContent();
-      const textLayer = new pdfjsLib.TextLayer({
-        textContentSource: textContent,
-        container: textLayerEl,
-        viewport: cssViewport,
-      });
-      await textLayer.render();
-      // The round() above can still land a fraction of a pixel off the
-      // canvas — force an exact match so the highlight overlay (positioned
-      // from plain fractions of this size) can't drift from the text layer.
-      textLayerEl.style.width = `${cssViewport.width}px`;
-      textLayerEl.style.height = `${cssViewport.height}px`;
+        const renderViewport = pdfPage.getViewport({ scale: displayScale * dpr });
+        const cssViewport = pdfPage.getViewport({ scale: displayScale });
 
-      if (highlightLayerRef.current) {
-        highlightLayerRef.current.style.width = `${cssViewport.width}px`;
-        highlightLayerRef.current.style.height = `${cssViewport.height}px`;
+        canvas.width = renderViewport.width;
+        canvas.height = renderViewport.height;
+        canvas.style.width = `${cssViewport.width}px`;
+        canvas.style.height = `${cssViewport.height}px`;
+
+        // A zoom change or page turn can fire before the previous render of
+        // this canvas finishes — pdf.js throws if two renders overlap, so
+        // cancel whatever's in flight before starting a new one.
+        renderTaskRef.current?.cancel();
+        const task = pdfPage.render({ canvas, viewport: renderViewport });
+        renderTaskRef.current = task;
+        try {
+          await task.promise;
+        } catch (error) {
+          if (pdfRef.current === pdf && (!(error instanceof Error) || error.name !== "RenderingCancelledException")) {
+            setLoadState({ phase: "error", message: readerErrorMessage(error) });
+          }
+          return;
+        } finally {
+          if (renderTaskRef.current === task) renderTaskRef.current = null;
+        }
+
+        if (pdfRef.current !== pdf) return;
+
+        textLayerEl.innerHTML = "";
+        // pdf.js scales each span's font size by --total-scale-factor relative
+        // to a size-1 base height, and sizes the layer itself via a round()
+        // that needs --scale-round-x/y — without these the whole calc chain
+        // is invalid and text collapses to the wrong size and position.
+        textLayerEl.style.setProperty("--total-scale-factor", String(cssViewport.scale));
+        textLayerEl.style.setProperty("--scale-round-x", "1px");
+        textLayerEl.style.setProperty("--scale-round-y", "1px");
+        const textContent = await pdfPage.getTextContent();
+        const textLayer = new pdfjsLib.TextLayer({
+          textContentSource: textContent,
+          container: textLayerEl,
+          viewport: cssViewport,
+        });
+        await textLayer.render();
+        // The round() above can still land a fraction of a pixel off the
+        // canvas — force an exact match so the highlight overlay (positioned
+        // from plain fractions of this size) can't drift from the text layer.
+        textLayerEl.style.width = `${cssViewport.width}px`;
+        textLayerEl.style.height = `${cssViewport.height}px`;
+
+        if (highlightLayerRef.current) {
+          highlightLayerRef.current.style.width = `${cssViewport.width}px`;
+          highlightLayerRef.current.style.height = `${cssViewport.height}px`;
+        }
+        drawHighlights(page, cssViewport.width, cssViewport.height);
+        if (pdfRef.current === pdf) setLoadState({ phase: "ready" });
+      } catch (error) {
+        if (pdfRef.current === pdf) setLoadState({ phase: "error", message: readerErrorMessage(error) });
       }
-      drawHighlights(page, cssViewport.width, cssViewport.height);
     },
     [zoomLevel]
   );
 
   useEffect(() => {
     if (numPages === 0) return;
-    renderPage(pageNumber);
+    void Promise.resolve().then(() => renderPage(pageNumber));
     saveProgress({
       location: String(pageNumber),
       percent: Math.round((pageNumber / numPages) * 10000) / 100,
@@ -188,7 +216,7 @@ export function PdfReader({
 
   useEffect(() => {
     if (numPages === 0) return;
-    loadHighlights().then(() => renderPage(pageNumber));
+    void loadHighlights().catch(() => {}).then(() => renderPage(pageNumber));
     // Re-fetches when a new highlight is saved; page/renderPage changes are
     // already handled by the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,7 +224,7 @@ export function PdfReader({
 
   useEffect(() => {
     function onResize() {
-      renderPage(pageNumber);
+      void renderPage(pageNumber);
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -382,10 +410,15 @@ export function PdfReader({
       </ReaderToolbar>
       <div
         ref={containerRef}
-        className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
+        <ReaderLoadStatus state={loadState} onRetry={() => {
+          setLoadState(INITIAL_READER_LOAD);
+          setNumPages(0);
+          setLoadAttempt((attempt) => attempt + 1);
+        }} />
         <div className="relative">
           <canvas ref={canvasRef} className="rounded-sm shadow-lg" />
           <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />

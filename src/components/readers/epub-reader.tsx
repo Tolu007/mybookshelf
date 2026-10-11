@@ -12,6 +12,8 @@ import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
+import { downloadBook, INITIAL_READER_LOAD, readerErrorMessage, type ReaderLoadState } from "@/lib/book-download";
+import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 
 const MIN_FONT_PERCENT = 80;
 const MAX_FONT_PERCENT = 160;
@@ -42,6 +44,8 @@ export function EpubReader({
   const [fontPercent, setFontPercent] = useState(100);
   const [highlightMode, setHighlightMode] = useState(false);
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
+  const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const { elapsedSeconds } = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
 
@@ -52,11 +56,9 @@ export function EpubReader({
   useEffect(() => {
     if (!viewerRef.current) return;
 
-    // epub.js guesses the source type from the URL's file extension, and our
-    // file route has none — without `openAs` it assumes this is a directory
-    // of already-unzipped files and tries to fetch container.xml etc. as
-    // separate requests, which silently fails to render anything at all.
-    const book = Epub(`/api/books/${bookId}/file`, { openAs: "epub" });
+    let cancelled = false;
+    const controller = new AbortController();
+    const book = Epub();
     const rendition = book.renderTo(viewerRef.current, {
       width: "100%",
       height: "100%",
@@ -64,6 +66,10 @@ export function EpubReader({
       spread: spreadForWidth(window.innerWidth),
     });
     renditionRef.current = rendition;
+    // epub.js emits this event without rejecting display() for some failures.
+    rendition.on("displayError", (error: unknown) => {
+      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+    });
 
     function handleResize() {
       rendition.spread(spreadForWidth(window.innerWidth));
@@ -89,7 +95,19 @@ export function EpubReader({
       attributeFilter: ["class"],
     });
 
-    rendition.display(initialLocation ?? undefined);
+    async function load() {
+      const bytes = await downloadBook(bookId, controller.signal, (state) => {
+        if (!cancelled) setLoadState(state);
+      });
+      if (cancelled) return;
+      await book.open(bytes, "binary");
+      if (cancelled) return;
+      await rendition.display(initialLocation ?? undefined);
+      if (!cancelled) setLoadState({ phase: "ready" });
+    }
+    load().catch((error) => {
+      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+    });
 
     rendition.on(
       "relocated",
@@ -174,12 +192,15 @@ export function EpubReader({
       .catch(() => {});
 
     return () => {
+      cancelled = true;
+      controller.abort();
       observer.disconnect();
       window.removeEventListener("resize", handleResize);
       rendition.destroy();
       book.destroy();
+      renditionRef.current = null;
     };
-  }, [bookId, initialLocation, saveProgress]);
+  }, [bookId, initialLocation, saveProgress, loadAttempt]);
 
   function changeFontSize(delta: number) {
     const next = Math.min(MAX_FONT_PERCENT, Math.max(MIN_FONT_PERCENT, fontPercent + delta));
@@ -244,6 +265,10 @@ export function EpubReader({
         />
       </ReaderToolbar>
       <div className="relative min-h-0 flex-1 overflow-hidden">
+        <ReaderLoadStatus state={loadState} onRetry={() => {
+          setLoadState(INITIAL_READER_LOAD);
+          setLoadAttempt((attempt) => attempt + 1);
+        }} />
         <button
           type="button"
           aria-label="Previous page"

@@ -39,6 +39,8 @@ const { JournalList } = require("../src/components/journal/journal-list.tsx");
 const { NewNoteDialog } = require("../src/components/journal/new-note-dialog.tsx");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
+const { ReaderLoadStatus } = require("../src/components/readers/reader-load-status.tsx");
+const { downloadBook, readerErrorMessage } = require("../src/lib/book-download.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
 
 const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
@@ -163,4 +165,76 @@ test("sign-in screen renders without credentials and retains its Google action",
   assert.match(html, /Continue with Google/);
   assert.match(html, /Make yourself at home/);
   assert.match(html, /Your PDFs and EPUBs/);
+});
+
+test("reader shows download percentage, unknown size, preparation, and useful errors", () => {
+  const progress = render(h(ReaderLoadStatus, { state: { phase: "downloading", loaded: 512, total: 1024 }, onRetry() {} }));
+  assert.match(progress, /role="progressbar"/);
+  assert.match(progress, /aria-valuenow="50"/);
+  assert.match(progress, /50%/);
+  const unknown = render(h(ReaderLoadStatus, { state: { phase: "downloading", loaded: 1024, total: null }, onRetry() {} }));
+  assert.doesNotMatch(unknown, /aria-valuenow/);
+  assert.match(unknown, /1 KB received/);
+  assert.match(render(h(ReaderLoadStatus, { state: { phase: "opening" }, onRetry() {} })), /100% downloaded/);
+  assert.equal(render(h(ReaderLoadStatus, { state: { phase: "ready" }, onRetry() {} })), "");
+  const error = render(h(ReaderLoadStatus, { state: { phase: "error", message: "Check your connection and try again." }, onRetry() {} }));
+  assert.match(error, /role="alert"/);
+  assert.match(error, /Try again/);
+  assert.match(error, /Back to library/);
+  assert.match(error, /Check your connection/);
+});
+
+test("book downloads report real chunk progress and return the exact file bytes", async () => {
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => new Response(new ReadableStream({ start(controller) {
+      controller.enqueue(new Uint8Array([1, 2]));
+      controller.enqueue(new Uint8Array([3, 4]));
+      controller.close();
+    } }), { headers: { "X-Book-Size": "4" } });
+    const progress = [];
+    const bytes = await downloadBook("book-1", new AbortController().signal, (state) => progress.push(state));
+    assert.deepEqual([...new Uint8Array(bytes)], [1, 2, 3, 4]);
+    assert.deepEqual(progress.filter((state) => state.loaded > 0).map((state) => [state.loaded, state.total]), [[2, 4], [4, 4]]);
+    assert.equal(progress.at(-1).phase, "opening");
+    global.fetch = async () => new Response(new Uint8Array([9]));
+    const unknown = [];
+    await downloadBook("book-1", new AbortController().signal, (state) => unknown.push(state));
+    assert.equal(unknown.find((state) => state.loaded === 1).total, null);
+  } finally { global.fetch = originalFetch; }
+});
+
+test("download failures are friendly, including interrupted streams and stalled connections", async () => {
+  const originalFetch = global.fetch;
+  try {
+    for (const [status, message] of [[401, /sign-in has expired/], [403, /reconnect Drive/], [404, /no longer available/], [429, /wait a moment/], [500, /temporarily unavailable/]]) {
+      global.fetch = async () => new Response("private upstream details", { status });
+      await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), message);
+    }
+    global.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /internet connection/);
+    global.fetch = async () => {
+      const response = new Response("Sign in");
+      Object.defineProperties(response, { redirected: { value: true }, url: { value: "https://shelf.example/login" } });
+      return response;
+    };
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /sign-in has expired/);
+    global.fetch = async () => new Response(new ReadableStream({ start(controller) {
+      controller.error(new TypeError("connection reset"));
+    } }));
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /internet connection/);
+    global.fetch = async () => new Response(new Uint8Array([1]), { headers: { "X-Book-Size": "2" } });
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /interrupted/);
+    global.fetch = async () => new Response(new Uint8Array());
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /empty/);
+    global.fetch = async (_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}, 10), /stopped responding/);
+    const controller = new AbortController();
+    const cancelled = downloadBook("book-1", controller.signal, () => {});
+    controller.abort();
+    await assert.rejects(cancelled, { name: "AbortError" });
+    assert.match(readerErrorMessage(new Error("secret parser details")), /damaged or unsupported/);
+  } finally { global.fetch = originalFetch; }
 });
