@@ -1,12 +1,22 @@
+import { BOOK_FILE_ERRORS, isBookFileErrorCode } from "@/lib/book-file-errors";
+
 export type ReaderLoadState =
   | { phase: "downloading"; loaded: number; total: number | null }
   | { phase: "opening" }
   | { phase: "ready" }
-  | { phase: "error"; message: string };
+  | { phase: "error"; message: string; reconnect?: boolean };
 
 export const INITIAL_READER_LOAD: ReaderLoadState = { phase: "downloading", loaded: 0, total: null };
 
-export class BookDownloadError extends Error {}
+export class BookDownloadError extends Error {
+  constructor(message: string, public readonly reconnect = false) {
+    super(message);
+  }
+}
+
+export function readerErrorState(error: unknown): ReaderLoadState {
+  return { phase: "error", message: readerErrorMessage(error), reconnect: error instanceof BookDownloadError && error.reconnect };
+}
 
 export function readerErrorMessage(error: unknown): string {
   if (error instanceof BookDownloadError) return error.message;
@@ -36,13 +46,18 @@ export async function downloadBook(
       throw new BookDownloadError("Your sign-in has expired. Sign in again to download this book.");
     }
     if (!response.ok) {
+      const code = response.headers.get("X-Book-Error");
+      if (isBookFileErrorCode(code)) {
+        const failure = BOOK_FILE_ERRORS[code];
+        throw new BookDownloadError(failure.message, failure.reconnect);
+      }
       const messages: Record<number, string> = {
         401: "Your sign-in has expired. Sign in again to download this book.",
         403: "We couldn't access this book in Google Drive. Sign out and sign in again to reconnect Drive.",
         404: "This book's file is no longer available. Check Google Drive, or upload a fresh copy from your library.",
         429: "Too many download requests. Please wait a moment and try again.",
       };
-      throw new BookDownloadError(messages[response.status] ?? "The book service is temporarily unavailable. Please try again in a moment.");
+      throw new BookDownloadError(messages[response.status] ?? "The book service is temporarily unavailable. Please try again in a moment.", response.status === 403);
     }
     const size = Number(response.headers.get("X-Book-Size") ?? (
       response.headers.has("Content-Encoding") ? null : response.headers.get("Content-Length")

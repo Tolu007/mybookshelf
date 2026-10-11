@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { createClient } from "@/lib/supabase/server";
 import { getBookFileStream } from "@/lib/google/drive";
+import { classifyBookFileError } from "@/lib/book-file-errors";
 
 const CONTENT_TYPES: Record<string, string> = {
   pdf: "application/pdf",
@@ -36,10 +37,17 @@ export async function GET(
   try {
     stream = await getBookFileStream(user.id, book.drive_file_id);
   } catch (error) {
-    const upstream = error as { response?: { status?: number }; message?: string };
-    const status = upstream.response?.status;
-    const reconnect = status === 401 || status === 403 || upstream.message?.startsWith("No Google Drive connection");
-    return new Response("Unable to download book", { status: reconnect ? 403 : status === 404 ? 404 : status === 429 ? 429 : 503 });
+    const failure = classifyBookFileError(error);
+    console.error("Book file download failed", {
+      bookId: id,
+      code: failure.code,
+      upstreamStatus: failure.upstreamStatus,
+      transportCode: failure.transportCode,
+    });
+    return Response.json({ error: failure.message, code: failure.code }, {
+      status: failure.status,
+      headers: { "Cache-Control": "private, no-store", "X-Book-Error": failure.code },
+    });
   }
   const webStream = Readable.toWeb(stream) as ReadableStream;
 

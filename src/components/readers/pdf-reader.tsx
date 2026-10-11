@@ -11,7 +11,7 @@ import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
-import { downloadBook, INITIAL_READER_LOAD, readerErrorMessage, type ReaderLoadState } from "@/lib/book-download";
+import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 
 const MIN_ZOOM = 0.5;
@@ -82,7 +82,7 @@ export function PdfReader({
     }
 
     load().catch((error) => {
-      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+      if (!cancelled) setLoadState(readerErrorState(error));
     });
     return () => {
       cancelled = true;
@@ -162,7 +162,7 @@ export function PdfReader({
           await task.promise;
         } catch (error) {
           if (pdfRef.current === pdf && (!(error instanceof Error) || error.name !== "RenderingCancelledException")) {
-            setLoadState({ phase: "error", message: readerErrorMessage(error) });
+            setLoadState(readerErrorState(error));
           }
           return;
         } finally {
@@ -199,7 +199,7 @@ export function PdfReader({
         drawHighlights(page, cssViewport.width, cssViewport.height);
         if (pdfRef.current === pdf) setLoadState({ phase: "ready" });
       } catch (error) {
-        if (pdfRef.current === pdf) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+        if (pdfRef.current === pdf) setLoadState(readerErrorState(error));
       }
     },
     [zoomLevel]

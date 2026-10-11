@@ -1,15 +1,41 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { BookOpen, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReaderLoadState } from "@/lib/book-download";
+import { createClient } from "@/lib/supabase/client";
+import { DRIVE_SCOPE } from "@/lib/google/constants";
 
 function formatBytes(bytes: number) {
   return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function ReaderLoadStatus({ state, onRetry }: { state: ReaderLoadState; onRetry: () => void }) {
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
+  async function reconnectDrive() {
+    if (reconnecting) return;
+    setReconnecting(true);
+    setReconnectError(null);
+    try {
+      const { error } = await createClient().auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          scopes: DRIVE_SCOPE,
+          queryParams: { access_type: "offline", prompt: "consent" },
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+        },
+      });
+      if (error) throw error;
+    } catch {
+      setReconnectError("We couldn't start the Google Drive connection. Check your connection and try again.");
+      setReconnecting(false);
+    }
+  }
+
   if (state.phase === "ready") return null;
   const error = state.phase === "error";
   const percent = state.phase === "downloading" && state.total !== null
@@ -25,9 +51,11 @@ export function ReaderLoadStatus({ state, onRetry }: { state: ReaderLoadState; o
           <>
             <p className="mt-2 text-sm text-muted-foreground">{state.message}</p>
             <div className="mt-5 flex flex-wrap items-center gap-4">
-              <Button onClick={onRetry}>Try again</Button>
+              {state.reconnect && <Button onClick={reconnectDrive} disabled={reconnecting}>{reconnecting ? "Connecting…" : "Reconnect Google Drive"}</Button>}
+              <Button variant={state.reconnect ? "outline" : "default"} onClick={onRetry}>Try again</Button>
               <Link href="/" className="text-sm underline underline-offset-4">Back to library</Link>
             </div>
+            {reconnectError && <p role="alert" className="mt-3 text-sm text-destructive">{reconnectError}</p>}
           </>
         ) : (
           <>

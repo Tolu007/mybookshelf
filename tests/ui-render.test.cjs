@@ -40,7 +40,8 @@ const { NewNoteDialog } = require("../src/components/journal/new-note-dialog.tsx
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
 const { ReaderLoadStatus } = require("../src/components/readers/reader-load-status.tsx");
-const { downloadBook, readerErrorMessage } = require("../src/lib/book-download.ts");
+const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
+const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
 
 const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
@@ -182,6 +183,68 @@ test("reader shows download percentage, unknown size, preparation, and useful er
   assert.match(error, /Try again/);
   assert.match(error, /Back to library/);
   assert.match(error, /Check your connection/);
+  const reconnect = render(h(ReaderLoadStatus, { state: { phase: "error", message: "Renew your connection.", reconnect: true }, onRetry() {} }));
+  assert.match(reconnect, /Reconnect Google Drive/);
+  assert.doesNotMatch(error, /Reconnect Google Drive/);
+});
+
+test("expired Google grants and server configuration failures are distinguished from outages", () => {
+  assert.equal(classifyBookFileError({ response: { status: 400, data: { error: "invalid_grant" } } }).code, "drive_reconnect");
+  assert.equal(classifyBookFileError(new Error("invalid_grant: Token has been expired or revoked.")).status, 403);
+  assert.equal(classifyBookFileError({ response: { status: 400, data: { error: "invalid_client" } } }).code, "drive_configuration");
+  assert.equal(classifyBookFileError(new DriveAccessError("drive_configuration")).status, 500);
+  assert.equal(classifyBookFileError(new DriveAccessError("token_store_unavailable")).reconnect, false);
+  assert.equal(classifyBookFileError({ response: { status: 403, data: { error: { errors: [{ reason: "userRateLimitExceeded" }] } } } }).status, 429);
+  assert.equal(classifyBookFileError({ response: { status: 404 } }).status, 404);
+  const failure = classifyBookFileError({ code: "ECONNRESET", message: "secret token", config: { headers: { Authorization: "Bearer secret" } } });
+  assert.equal(failure.status, 503);
+  assert.equal(failure.transportCode, "ECONNRESET");
+  assert.doesNotMatch(JSON.stringify(failure), /secret|Authorization/);
+});
+
+test("file route logs safe diagnostics and returns a reconnect error for an expired Google grant", async () => {
+  const loadModule = Module._load;
+  const logError = console.error;
+  let upstreamError = { response: { status: 400, data: { error: "invalid_grant" } }, config: { client_secret: "private-secret" } };
+  const logs = [];
+  try {
+    Module._load = function (request, ...args) {
+      if (request === "@/lib/supabase/server") return { createClient: async () => ({
+        auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+        from: () => {
+          const query = { select: () => query, eq: () => query, single: async () => ({ data: { drive_file_id: "drive-1", format: "pdf", file_size_bytes: 3 } }) };
+          return query;
+        },
+      }) };
+      if (request === "@/lib/google/drive") return { getBookFileStream: async () => {
+        if (upstreamError) throw upstreamError;
+        return require("node:stream").Readable.from([Buffer.from([1, 2, 3])]);
+      } };
+      return loadModule.call(this, request, ...args);
+    };
+    console.error = (...args) => logs.push(args);
+    const { GET } = require("../src/app/api/books/[id]/file/route.ts");
+    const request = new Request("https://shelf.example/api/books/book-1/file");
+    const context = { params: Promise.resolve({ id: "book-1" }) };
+    const expired = await GET(request, context);
+    assert.equal(expired.status, 403);
+    assert.equal(expired.headers.get("X-Book-Error"), "drive_reconnect");
+    assert.match((await expired.json()).error, /renewed/);
+    assert.equal(logs[0][1].upstreamStatus, 400);
+    assert.doesNotMatch(JSON.stringify(logs), /private-secret|client_secret/);
+    upstreamError = { code: "ETIMEDOUT" };
+    const outage = await GET(request, context);
+    assert.equal(outage.status, 503);
+    assert.equal(logs.at(-1)[1].transportCode, "ETIMEDOUT");
+    upstreamError = null;
+    const success = await GET(request, context);
+    assert.equal(success.status, 200);
+    assert.equal(success.headers.get("X-Book-Size"), "3");
+    assert.deepEqual([...new Uint8Array(await success.arrayBuffer())], [1, 2, 3]);
+  } finally {
+    Module._load = loadModule;
+    console.error = logError;
+  }
 });
 
 test("book downloads report real chunk progress and return the exact file bytes", async () => {
@@ -211,6 +274,14 @@ test("download failures are friendly, including interrupted streams and stalled 
       global.fetch = async () => new Response("private upstream details", { status });
       await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), message);
     }
+    global.fetch = async () => new Response("private details", { status: 403, headers: { "X-Book-Error": "drive_reconnect" } });
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), (error) => {
+      assert.equal(readerErrorState(error).reconnect, true);
+      assert.match(readerErrorMessage(error), /renewed/);
+      return true;
+    });
+    global.fetch = async () => new Response("private details", { status: 500, headers: { "X-Book-Error": "drive_configuration" } });
+    await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /configured correctly/);
     global.fetch = async () => { throw new TypeError("Failed to fetch"); };
     await assert.rejects(downloadBook("book-1", new AbortController().signal, () => {}), /internet connection/);
     global.fetch = async () => {

@@ -12,7 +12,7 @@ import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
-import { downloadBook, INITIAL_READER_LOAD, readerErrorMessage, type ReaderLoadState } from "@/lib/book-download";
+import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 
 const MIN_FONT_PERCENT = 80;
@@ -68,7 +68,7 @@ export function EpubReader({
     renditionRef.current = rendition;
     // epub.js emits this event without rejecting display() for some failures.
     rendition.on("displayError", (error: unknown) => {
-      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+      if (!cancelled) setLoadState(readerErrorState(error));
     });
 
     function handleResize() {
@@ -106,7 +106,7 @@ export function EpubReader({
       if (!cancelled) setLoadState({ phase: "ready" });
     }
     load().catch((error) => {
-      if (!cancelled) setLoadState({ phase: "error", message: readerErrorMessage(error) });
+      if (!cancelled) setLoadState(readerErrorState(error));
     });
 
     rendition.on(

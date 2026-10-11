@@ -1,9 +1,13 @@
 import { google, drive_v3 } from "googleapis";
 import { createClient } from "@/lib/supabase/server";
+import { DriveAccessError } from "@/lib/book-file-errors";
 
 const APP_FOLDER_NAME = "Shelf Library";
 
 async function getOAuthClient(userId: string) {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    throw new DriveAccessError("drive_configuration");
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("user_google_tokens")
@@ -11,11 +15,8 @@ async function getOAuthClient(userId: string) {
     .eq("user_id", userId)
     .single();
 
-  if (error || !data) {
-    throw new Error(
-      "No Google Drive connection for this account. Sign out and back in to grant Drive access."
-    );
-  }
+  if (error && error.code !== "PGRST116") throw new DriveAccessError("token_store_unavailable");
+  if (!data?.refresh_token) throw new DriveAccessError("drive_reconnect");
 
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
