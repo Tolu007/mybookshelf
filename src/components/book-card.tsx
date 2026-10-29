@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { BookCover } from "@/components/book-cover";
-import { Progress } from "@/components/ui/progress";
 import { BookCardActions } from "@/components/book-card-actions";
 import { BookCardMenu } from "@/components/book-card-menu";
+import { bookStatus, type BookStatus } from "@/lib/library";
+import { cn } from "@/lib/utils";
 
 export type LibraryBook = {
   id: string;
@@ -15,35 +15,54 @@ export type LibraryBook = {
   is_favorite: boolean;
   category_id?: string | null;
   finished_at?: string | null;
+  percent?: number | null;
 };
 
-export function BookCard({ book, categories = [], progressPercent }: {
+const STATUS_BADGE: Record<BookStatus, { label: string; className: string } | null> = {
+  finished: { label: "Finished", className: "border-primary/30 bg-primary text-primary-foreground" },
+  reading: { label: "Reading", className: "border-border bg-popover text-sage" },
+  want_to_read: { label: "Want to read", className: "border-transparent bg-ribbon text-ribbon-foreground" },
+  unread: null,
+};
+
+export function FormatBadge({ format, className }: { format: string; className?: string }) {
+  return (
+    <span className={cn("rounded-sm border border-border bg-popover/90 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.04em] text-sage uppercase backdrop-blur-sm", className)}>
+      {format}
+    </span>
+  );
+}
+
+export function BookCard({ book, categories = [] }: {
   book: LibraryBook;
   categories?: { id: string; name: string }[];
-  progressPercent?: number;
 }) {
+  const percent = book.percent ?? null;
+  const badge = STATUS_BADGE[bookStatus({ finished_at: book.finished_at ?? null, percent, want_to_read: book.want_to_read })];
+
   return (
-    <article className="group min-w-0">
-      <div className="relative rounded-xl border border-border/60 bg-muted/50 p-5 pb-6 transition-colors group-hover:bg-muted/80 sm:p-6">
-        <Link href={`/read/${book.id}`} aria-label={`Read ${book.title}`} className="mx-auto block w-[82%] max-w-44 rounded-lg transition-transform duration-300 group-hover:-translate-y-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">
-          <BookCover title={book.title} author={book.author} coverUrl={book.cover_url} />
+    <article className="group surface surface-lift flex min-w-0 flex-col p-2.5 sm:p-3">
+      <div className="relative mb-2.5">
+        <Link href={`/read/${book.id}`} aria-label={`Read ${book.title}`} className="block overflow-hidden rounded-md bg-well ring-1 ring-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <BookCover title={book.title} author={book.author} coverUrl={book.cover_url} className="transition-transform duration-300 group-hover:scale-[1.03]" />
         </Link>
-        <BookCardActions bookId={book.id} initialFavorite={book.is_favorite} initialWantToRead={book.want_to_read} />
-        <div className="absolute top-2 right-2">
+        <FormatBadge format={book.format} className="pointer-events-none absolute top-1.5 left-1.5" />
+        {badge && (
+          <span className={cn("pointer-events-none absolute right-1.5 bottom-1.5 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium shadow-sm", badge.className)}>
+            {badge.label}
+          </span>
+        )}
+        <div className="absolute top-1 right-1 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100 sm:has-aria-expanded:opacity-100">
           <BookCardMenu book={{ id: book.id, title: book.title, author: book.author, cover_url: book.cover_url, category_id: book.category_id ?? null }} categories={categories} />
         </div>
       </div>
-      <div className="space-y-1.5 px-0.5 pt-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[9px] font-medium tracking-[0.12em] text-muted-foreground uppercase">{book.format}</span>
-          {book.finished_at && <span className="text-[9px] text-accent-foreground">Finished</span>}
-          {typeof progressPercent === "number" && <span className="text-[10px] text-primary tabular-nums">{Math.round(progressPercent)}% read</span>}
-        </div>
-        <Link href={`/read/${book.id}`} className="flex items-start justify-between gap-2 text-sm font-medium leading-snug hover:text-primary">
-          <span className="line-clamp-2">{book.title}</span><ArrowUpRight className="mt-0.5 hidden size-3.5 shrink-0 text-muted-foreground group-hover:block" aria-hidden="true" />
-        </Link>
-        <p className="truncate text-xs text-muted-foreground">{book.author ?? "Unknown author"}</p>
-        {typeof progressPercent === "number" && <Progress value={progressPercent} aria-label={`Reading progress for ${book.title}`} className="mt-2 h-1 bg-border" />}
+      <Link href={`/read/${book.id}`} className="truncate font-heading text-[15px] leading-5 font-semibold transition-colors hover:text-sage">
+        {book.title}
+      </Link>
+      <p className="mt-0.5 truncate text-[11px] tracking-[0.02em] text-muted-foreground">{book.author ?? "Unknown author"}</p>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5">
+        <BookCardActions bookId={book.id} initialFavorite={book.is_favorite} initialWantToRead={book.want_to_read} />
+        {percent !== null && !book.finished_at && <span className="meta">{Math.round(percent)}%</span>}
       </div>
     </article>
   );

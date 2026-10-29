@@ -2,7 +2,8 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { BookOpen } from "lucide-react";
 
-const PALETTES = ["bg-[#374f43]", "bg-[#a05a43]", "bg-[#3e5063]", "bg-[#a0834c]", "bg-[#6c5c70]"];
+// Cloth-binding colours for books without cover art.
+const PALETTES = ["bg-[#2d5a46]", "bg-[#7a2e2a]", "bg-[#3e5063]", "bg-[#8a5a2b]", "bg-[#5c4a63]"];
 
 export function BookCover({ title, author, coverUrl, className, compact = false, sizes = "(max-width: 640px) 40vw, (max-width: 1024px) 180px, 200px" }: {
   title: string;
@@ -14,7 +15,7 @@ export function BookCover({ title, author, coverUrl, className, compact = false,
 }) {
   const palette = Array.from(title).reduce((sum, char) => sum + char.charCodeAt(0), 0) % PALETTES.length;
   return (
-    <div className={cn("book-jacket relative aspect-2/3 overflow-hidden rounded-[3px_7px_7px_3px]", PALETTES[palette], className)}>
+    <div className={cn("book-jacket relative aspect-2/3 overflow-hidden rounded-[2px_4px_4px_2px]", PALETTES[palette], className)}>
       {coverUrl ? (
         coverUrl.startsWith("data:") ? (
           // eslint-disable-next-line @next/next/no-img-element -- embedded cover, not optimizable

@@ -1,174 +1,172 @@
-import { createClient } from "@/lib/supabase/server";
-import { Input } from "@/components/ui/input";
-import { AddBookDialog } from "@/components/add-book-dialog";
-import { BookCard } from "@/components/book-card";
-import { LibraryCollection } from "@/components/library-collection";
-import { ReadingHero } from "@/components/reading-hero";
-import { PageHeader } from "@/components/page-header";
-import { BookOpen, Search, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { quoteOfTheDay } from "@/lib/quotes";
+import { format, formatDistanceToNowStrict, subDays } from "date-fns";
+import { BookOpen, Clock3 } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { AddBookDialog } from "@/components/add-book-dialog";
+import { PageHeader } from "@/components/page-header";
+import { QuoteCard } from "@/components/library/quote-card";
+import { ReadingCard } from "@/components/library/reading-card";
+import { TimeGreeting } from "@/components/library/time-greeting";
+import { LibraryFilters } from "@/components/library/library-filters";
+import { LibraryShelves } from "@/components/library/library-shelves";
+import { quoteIndexForDay } from "@/lib/quotes";
+import {
+  filterBooks,
+  filterByFormat,
+  groupIntoShelves,
+  sortBooks,
+  type LibraryParams,
+  type ShelfBook,
+} from "@/lib/library";
 
-const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
-
-const SHELF_TITLES: Record<string, string> = {
-  reading: "Reading",
-  want_to_read: "Want to Read",
-  finished: "Finished",
-  favorites: "Favorites",
-};
+const IN_FLIGHT_LIMIT = 3;
 
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; shelf?: string; q?: string }>;
+  searchParams: Promise<LibraryParams>;
 }) {
-  const { category: categoryFilter, shelf: shelfFilter, q: query } = await searchParams;
+  const params = await searchParams;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: categories } = await supabase
-    .from("categories")
-    .select("id, name")
-    .order("name");
+  if (!user) return null;
 
-  let booksQuery = supabase
-    .from("books")
-    .select(
-      "id, title, author, cover_url, format, category_id, want_to_read, is_favorite, finished_at"
-    )
-    .order("added_at", { ascending: false });
+  const since = format(subDays(new Date(), 29), "yyyy-MM-dd");
+  const [{ data: categories }, { data: bookRows }, { data: progressRows }, { data: recentSessions }] = await Promise.all([
+    supabase.from("categories").select("id, name").order("name"),
+    supabase.from("books").select("id, title, author, cover_url, format, category_id, want_to_read, is_favorite, finished_at, added_at"),
+    supabase.from("reading_progress").select("book_id, percent, location, updated_at"),
+    supabase.from("reading_sessions").select("duration_seconds").gte("local_date", since),
+  ]);
 
-  if (categoryFilter) {
-    booksQuery = booksQuery.eq("category_id", categoryFilter);
-  }
-  if (query) {
-    const safeQuery = query.replace(/[,()]/g, "");
-    booksQuery = booksQuery.or(`title.ilike.%${safeQuery}%,author.ilike.%${safeQuery}%`);
-  }
-
-  if (shelfFilter === "want_to_read") {
-    booksQuery = booksQuery.eq("want_to_read", true);
-  } else if (shelfFilter === "favorites") {
-    booksQuery = booksQuery.eq("is_favorite", true);
-  } else if (shelfFilter === "finished") {
-    booksQuery = booksQuery.not("finished_at", "is", null);
-  } else if (shelfFilter === "reading") {
-    const { data: progressRows } = await supabase.from("reading_progress").select("book_id");
-    const ids = (progressRows ?? []).map((row) => row.book_id);
-    booksQuery = booksQuery.is("finished_at", null).in("id", ids.length ? ids : [EMPTY_UUID]);
-  }
-
-  const { data: books } = await booksQuery;
-
-  const showContinueReading = !categoryFilter && !shelfFilter && !query;
-  let continueReading: {
-    percent: number;
-    book: {
-      id: string;
-      title: string;
-      author: string | null;
-      cover_url: string | null;
-      format: string;
-      want_to_read: boolean;
-      is_favorite: boolean;
-      category_id: string | null;
+  const progressByBook = new Map((progressRows ?? []).map((row) => [row.book_id, row]));
+  const books: ShelfBook[] = (bookRows ?? []).map((book) => {
+    const progress = progressByBook.get(book.id);
+    return {
+      ...book,
+      percent: progress ? Number(progress.percent) : null,
+      last_read_at: progress?.updated_at ?? null,
     };
-  }[] = [];
+  });
 
-  if (showContinueReading) {
-    type ProgressRow = {
-      percent: number;
-      updated_at: string;
-      book: {
-        id: string;
-        title: string;
-        author: string | null;
-        cover_url: string | null;
-        format: string;
-        want_to_read: boolean;
-        is_favorite: boolean;
-        category_id: string | null;
-        finished_at: string | null;
-      } | null;
-    };
+  // Books opened but not finished, most recently read first.
+  const inFlight = books
+    .filter((book) => !book.finished_at && book.last_read_at)
+    .sort((a, b) => (b.last_read_at ?? "").localeCompare(a.last_read_at ?? ""));
+  const featured = inFlight.slice(0, IN_FLIGHT_LIMIT);
 
-    const { data: progressRows } = await supabase
-      .from("reading_progress")
-      .select(
-        "percent, updated_at, book:books(id, title, author, cover_url, format, want_to_read, is_favorite, category_id, finished_at)"
-      )
-      .order("updated_at", { ascending: false })
-      .limit(10);
+  const { data: annotationRows } = featured.length
+    ? await supabase.from("annotations").select("book_id, type").in("book_id", featured.map((book) => book.id))
+    : { data: [] };
+  const countsFor = (bookId: string, type: string) =>
+    (annotationRows ?? []).filter((row) => row.book_id === bookId && row.type === type).length;
 
-    continueReading = ((progressRows ?? []) as unknown as ProgressRow[])
-      .filter(
-        (row): row is ProgressRow & { book: NonNullable<ProgressRow["book"]> } =>
-          Boolean(row.book) && !row.book!.finished_at
-      )
-      .slice(0, 6);
-  }
+  const avgMinutes = Math.round((recentSessions ?? []).reduce((sum, row) => sum + row.duration_seconds, 0) / 60 / 30);
 
-  const pageTitle = query
-    ? `Results for "${query}"`
-    : categoryFilter
-      ? (categories?.find((c) => c.id === categoryFilter)?.name ?? "My library")
-      : shelfFilter
-        ? (SHELF_TITLES[shelfFilter] ?? "Library")
-        : "My library";
+  const categoryList = categories ?? [];
+  const categoryName = (id: string | null) => categoryList.find((category) => category.id === id)?.name ?? null;
 
-  const quote = quoteOfTheDay();
+  // Counts for the format pills ignore the format filter itself; category
+  // tabs ignore the category filter so you can see what's on other shelves.
+  const matching = filterBooks(books, params);
+  const visible = sortBooks(filterByFormat(matching, params.format), params.sort);
+  const tabSource = filterByFormat(filterBooks(books, { ...params, category: undefined }), params.format);
+  const tabs = groupIntoShelves(tabSource, categoryList).map((shelf) => ({ id: shelf.id, name: shelf.name, count: shelf.books.length }));
+  const shelves = groupIntoShelves(visible, categoryList).filter((shelf) => !params.category || shelf.id === params.category);
+
+  const filtering = Boolean(params.q || params.shelf || params.category || params.format);
+  const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+  const firstName = (fullName ?? user.email?.split("@")[0] ?? "reader").split(" ")[0];
 
   return (
     <div className="page-shell space-y-8">
-      <PageHeader eyebrow="Your reading space" title={pageTitle} description={query ? "A familiar favorite or a new perspective. Find it here." : "Good books, collected. A world of ideas, always within reach."} action={<AddBookDialog categories={categories ?? []} />} />
-      <blockquote className="border-l-2 border-primary pl-4">
-        <p className="font-heading text-lg italic">&ldquo;{quote.text}&rdquo;</p>
-        {quote.author && <footer className="mt-1 text-xs text-muted-foreground">— {quote.author}</footer>}
-      </blockquote>
-      <form action="/" method="get" role="search" className="relative max-w-lg">
-        {shelfFilter && <input type="hidden" name="shelf" value={shelfFilter} />}
-        {categoryFilter && <input type="hidden" name="category" value={categoryFilter} />}
-        <label htmlFor="library-search" className="sr-only">Search by title or author</label>
-        <Search className="pointer-events-none absolute top-3 left-3.5 size-4 text-muted-foreground" aria-hidden="true" />
-        <Input id="library-search" type="search" name="q" placeholder="Find your next chapter…" defaultValue={query ?? ""} className="h-11 bg-card pr-12 pl-10" />
-        <button type="submit" aria-label="Search library" className="absolute top-1 right-1 flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"><ArrowRight className="size-4" /></button>
-      </form>
-      {showContinueReading && <ReadingHero current={continueReading[0]} />}
-      {continueReading.length > 1 && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between"><h2 className="font-heading text-xl tracking-tight">On your nightstand</h2><Link href="/?shelf=reading" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">See all <ArrowRight className="size-3" /></Link></div>
-          <div className="grid auto-cols-[160px] grid-flow-col gap-5 overflow-x-auto pb-3 sm:auto-cols-[180px]">
-            {continueReading.slice(1).map((row) => (
-              <BookCard
-                key={row.book.id}
-                book={row.book}
-                categories={categories ?? []}
-                progressPercent={row.percent}
+      <PageHeader
+        eyebrow={<><span>Ex libris {firstName}</span><span className="text-muted-foreground" aria-hidden="true">•</span><span className="text-muted-foreground">{books.length} {books.length === 1 ? "volume" : "volumes"}</span></>}
+        title={
+          params.q ? (
+            <>Results for &ldquo;{params.q}&rdquo;</>
+          ) : (
+            <>
+              <TimeGreeting />, {firstName}.{" "}
+              <span className="font-normal text-muted-foreground italic lg:inline">
+                {inFlight.length === 0
+                  ? "Your shelves are ready."
+                  : `You have ${inFlight.length} ${inFlight.length === 1 ? "book" : "books"} currently in flight.`}
+              </span>
+            </>
+          )
+        }
+        action={
+          books.length > 0 && (
+            <LibraryFilters
+              params={params}
+              formatCounts={{
+                all: matching.length,
+                epub: matching.filter((book) => book.format === "epub").length,
+                pdf: matching.filter((book) => book.format === "pdf").length,
+              }}
+            />
+          )
+        }
+      />
+
+      {!filtering && <QuoteCard initialIndex={quoteIndexForDay()} />}
+
+      {!filtering && featured.length > 0 && (
+        <section aria-labelledby="in-flight-heading" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="size-2 rounded-full bg-ribbon" aria-hidden="true" />
+              <h2 id="in-flight-heading" className="font-heading text-xl leading-7 font-semibold">Currently reading</h2>
+              <span className="tag text-sage">{inFlight.length} in progress</span>
+            </div>
+            {avgMinutes > 0 && (
+              <p className="meta flex items-center gap-1.5"><Clock3 className="size-3.5 text-amber" aria-hidden="true" /> Avg. {avgMinutes} min / day over 30 days</p>
+            )}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {featured.map((book, index) => (
+              <ReadingCard
+                key={book.id}
+                book={book}
+                percent={book.percent ?? 0}
+                location={progressByBook.get(book.id)?.location ?? null}
+                categoryName={categoryName(book.category_id)}
+                lastReadLabel={book.last_read_at ? formatDistanceToNowStrict(new Date(book.last_read_at), { addSuffix: true }) : null}
+                notes={countsFor(book.id, "note")}
+                highlights={countsFor(book.id, "highlight")}
+                primary={index === 0}
               />
             ))}
           </div>
         </section>
       )}
 
-      <section aria-label="Book collection" className="space-y-6">
-        <nav aria-label="Filter books by shelf" className="flex gap-5 overflow-x-auto border-b border-border">
-          {[{ key: "", label: "All books" }, { key: "reading", label: "Reading" }, { key: "want_to_read", label: "Want to read" }, { key: "finished", label: "Finished" }, { key: "favorites", label: "Favorites" }].map((item) => (
-            <Link key={item.key} href={{ pathname: "/", query: { ...(item.key ? { shelf: item.key } : {}), ...(categoryFilter ? { category: categoryFilter } : {}), ...(query ? { q: query } : {}) } }} aria-current={(shelfFilter ?? "") === item.key ? "page" : undefined} className={cn("shrink-0 border-b-2 px-0.5 pb-3 text-xs transition-colors", (shelfFilter ?? "") === item.key ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>{item.label}</Link>
-          ))}
-        </nav>
-
-        {!books?.length ? (
-          <div className="surface flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-            <span className="mb-2 flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground"><BookOpen className="size-6" strokeWidth={1.5} aria-hidden="true" /></span>
-            <h2 className="font-heading text-2xl">{query ? "No matching chapters" : shelfFilter || categoryFilter ? "A shelf waiting to be filled" : "Every library starts with one book"}</h2>
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{query ? `No books match "${query}". Try another title or author.` : shelfFilter || categoryFilter ? "Books you add to this collection will find their home here." : "Bring a PDF or EPUB you love. We'll keep your place, and the thoughts you find along the way."}</p>
-            <div className="mt-3">{query || shelfFilter || categoryFilter ? <Link href="/" className="text-sm font-medium text-primary hover:underline">Back to all books</Link> : <AddBookDialog categories={categories ?? []} />}</div>
+      {shelves.length > 0 ? (
+        <LibraryShelves shelves={shelves} tabs={tabs} params={params} categories={categoryList} />
+      ) : (
+        <div className="surface flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+          <span className="mb-2 flex size-14 items-center justify-center rounded-full border border-border bg-secondary text-sage"><BookOpen className="size-6" strokeWidth={1.5} aria-hidden="true" /></span>
+          <h2 className="font-heading text-2xl">{params.q ? "No matching books" : filtering ? "A shelf waiting to be filled" : "Every library starts with one book"}</h2>
+          <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            {params.q
+              ? `No books match "${params.q}". Try another title or author.`
+              : filtering
+                ? "Nothing here matches these filters yet."
+                : "Upload a PDF or EPUB you love. Shelf keeps your place, and the thoughts you find along the way."}
+          </p>
+          <div className="mt-3">
+            {filtering ? (
+              <Link href="/" className="text-sm font-semibold text-sage hover:underline">Clear filters</Link>
+            ) : (
+              <AddBookDialog categories={categoryList} />
+            )}
           </div>
-        ) : (
-          <LibraryCollection books={books} categories={categories ?? []} />
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }

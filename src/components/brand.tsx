@@ -1,23 +1,24 @@
 import { BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function Brand({ className }: { className?: string }) {
+export function BrandMark({ className }: { className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span className="flex size-9 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-        <BookOpen className="size-5" strokeWidth={1.6} aria-hidden="true" />
-      </span>
-      <span className="font-heading text-[30px] leading-none font-medium tracking-[-0.06em]">shelf<span className="text-primary">.</span></span>
+    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary text-primary-foreground shadow-sm", className)}>
+      <BookOpen className="size-[18px]" strokeWidth={1.6} aria-hidden="true" />
     </span>
   );
 }
 
-export function ReadingArt({ className }: { className?: string }) {
+export function Brand({ className, compact = false }: { className?: string; compact?: boolean }) {
   return (
-    <div className={cn("reading-art", className)} aria-hidden="true">
-      <div><small>Wander</small><span>The quiet<br />hours</span><i /></div>
-      <div><small>Discover</small><span>Room<br />to think</span><i /></div>
-      <div><small>Get lost</small><span>One more<br />chapter</span><i /></div>
-    </div>
+    <span className={cn("inline-flex min-w-0 items-center gap-2.5", className)}>
+      <BrandMark />
+      {!compact && (
+        <span className="flex min-w-0 flex-col">
+          <span className="font-heading text-xl leading-6 font-semibold tracking-tight text-sage">Shelf</span>
+          <span className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">Personal library</span>
+        </span>
+      )}
+    </span>
   );
 }
