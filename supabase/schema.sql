@@ -183,3 +183,12 @@ create policy "own stats" on public.user_stats
 drop policy if exists "own annotations" on public.annotations;
 create policy "own annotations" on public.annotations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Journal notes can be written outside any book, so a note may have no book
+-- and no location. Highlights and bookmarks still need both. Deleting a
+-- book still deletes its annotations (including notes written in it).
+alter table public.annotations alter column book_id drop not null;
+alter table public.annotations alter column location drop not null;
+alter table public.annotations drop constraint if exists annotations_book_required_check;
+alter table public.annotations add constraint annotations_book_required_check
+  check (type = 'note' or (book_id is not null and location is not null));

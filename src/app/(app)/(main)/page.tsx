@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { BookOpen, Search, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { quoteOfTheDay } from "@/lib/quotes";
 
 const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -116,9 +117,15 @@ export default async function LibraryPage({
         ? (SHELF_TITLES[shelfFilter] ?? "Library")
         : "My library";
 
+  const quote = quoteOfTheDay();
+
   return (
     <div className="page-shell space-y-8">
       <PageHeader eyebrow="Your reading space" title={pageTitle} description={query ? "A familiar favorite or a new perspective. Find it here." : "Good books, collected. A world of ideas, always within reach."} action={<AddBookDialog categories={categories ?? []} />} />
+      <blockquote className="border-l-2 border-primary pl-4">
+        <p className="font-heading text-lg italic">&ldquo;{quote.text}&rdquo;</p>
+        {quote.author && <footer className="mt-1 text-xs text-muted-foreground">— {quote.author}</footer>}
+      </blockquote>
       <form action="/" method="get" role="search" className="relative max-w-lg">
         {shelfFilter && <input type="hidden" name="shelf" value={shelfFilter} />}
         {categoryFilter && <input type="hidden" name="category" value={categoryFilter} />}
