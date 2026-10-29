@@ -1,4 +1,5 @@
 import { buildMonthlyTotals, formatMinutes } from "@/lib/stats-aggregate";
+import { cn } from "@/lib/utils";
 
 export function ReadingBarChart({
   dailyMinutes,
@@ -9,6 +10,9 @@ export function ReadingBarChart({
 }) {
   const months = buildMonthlyTotals(dailyMinutes, year);
   const maxHours = Math.max(1, ...months.map((month) => month.minutes / 60));
+  // The best month gets the amber ribbon; none while there's no reading.
+  const peakMinutes = Math.max(...months.map((month) => month.minutes));
+  const peakMonth = peakMinutes > 0 ? months.findIndex((month) => month.minutes === peakMinutes) : -1;
   const roughStep = maxHours / 4;
   const magnitude = 10 ** Math.floor(Math.log10(roughStep));
   const step = [1, 2, 2.5, 5, 10].find((value) => value * magnitude >= roughStep)! * magnitude;
@@ -51,7 +55,10 @@ export function ReadingBarChart({
               <div key={month.month} className="flex h-full flex-1 items-end justify-center">
                 <div
                   title={`${month.label}: ${formatMinutes(month.minutes)}`}
-                  className="w-full max-w-10 rounded-t-md bg-primary/75 transition-colors hover:bg-primary"
+                  className={cn(
+                    "w-full max-w-10 rounded-t-sm transition-opacity hover:opacity-85",
+                    month.month === peakMonth ? "bg-ribbon" : "bg-primary"
+                  )}
                   style={{ height: `${(month.minutes / 60 / axisMaxHours) * 100}%` }}
                 />
               </div>

@@ -45,6 +45,10 @@ const { ReaderLoadStatus } = require("../src/components/readers/reader-load-stat
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
+const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
+const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
+const preferences = require("../src/lib/preferences.ts");
+const statsAggregate = require("../src/lib/stats-aggregate.ts");
 
 const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
 function render(element, pathname = "/", query = "") {
@@ -185,6 +189,51 @@ test("reader toolbar retains back navigation, reading controls, and finished sta
   assert.match(html, /2m this session/);
   assert.match(html, /disabled=""/);
   assert.match(html, /Finished/);
+});
+
+test("reader toolbar shows today's goal including the current session, and a book progress ribbon", () => {
+  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", elapsedSeconds: 600, isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 10 }));
+  assert.match(html, /00:10:00/);
+  assert.match(html, /20\/40m/);
+  assert.match(html, /aria-label="Today&#x27;s reading goal"[^>]*aria-valuenow="50"/);
+  assert.match(html, /Finish book/);
+  assert.doesNotMatch(render(h(ReaderToolbar, { title: book.title, elapsedSeconds: 0, isFinished: false, onMarkFinished() {} })), /reading goal/);
+  const progress = render(h(ReaderProgress, { percent: 140, label: "Page 3 of 3" }));
+  assert.match(progress, /aria-valuenow="100"/);
+  assert.match(progress, /Page 3 of 3/);
+});
+
+test("preferences fall back to defaults for missing or invalid values and keep valid ones", () => {
+  assert.deepEqual(preferences.parsePreferences(null), preferences.DEFAULT_PREFERENCES);
+  const parsed = preferences.parsePreferences({
+    reader: { font: "garamond", fontSize: 99, lineHeight: 1.9, measure: 13, paper: "sepia", justify: "yes" },
+    goals: { dailyMinutes: 45, yearlyBooks: -2 },
+  });
+  assert.equal(parsed.reader.font, "garamond");
+  assert.equal(parsed.reader.fontSize, 18);
+  assert.equal(parsed.reader.lineHeight, 1.9);
+  assert.equal(parsed.reader.measure, 72);
+  assert.equal(parsed.reader.paper, "sepia");
+  assert.equal(parsed.reader.justify, false);
+  assert.deepEqual(parsed.goals, { dailyMinutes: 45, yearlyBooks: null });
+  assert.match(preferences.readerFontStylesheet("literata"), /^https:\/\/fonts\.googleapis\.com\/css2\?family=Literata/);
+});
+
+test("settings form offers real options only and saves only when something changed", () => {
+  const html = render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: h("p", null, "Profile card") }), "/settings");
+  assert.match(html, /role="radiogroup" aria-label="Typeface"/);
+  assert.match(html, /aria-label="Page colour"/);
+  assert.match(html, /Daily reading target/);
+  assert.match(html, /Profile card/);
+  assert.match(html, /disabled=""[^>]*>.*Save changes/s);
+  assert.doesNotMatch(html, /Readwise|Obsidian Markdown|LaTeX|Pomodoro/);
+});
+
+test("stats helpers find the peak weekday and count active days in range", () => {
+  const days = new Map([["2026-03-01", 30], ["2026-03-08", 90], ["2026-03-02", 20], ["2026-04-01", 0]]);
+  assert.deepEqual(statsAggregate.peakWeekday(days), { label: "Sundays", averageMinutes: 60 });
+  assert.equal(statsAggregate.peakWeekday(new Map()), null);
+  assert.equal(statsAggregate.countActiveDays(days, "2026-03-02", "2026-04-30"), 2);
 });
 
 test("zero reading data does not draw positive bars", () => {

@@ -1,23 +1,33 @@
-import { BookCheck, Clock3, Flame, CalendarDays, Trophy, Sun } from "lucide-react";
-
-const ICONS = { "Current streak": Flame, "Longest streak": Trophy, "Books finished": BookCheck, "Time read": Clock3, "This month": CalendarDays, "Today": Sun };
+import type { ComponentType, ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 export function StatTile({
   label,
+  icon: Icon,
   value,
-  sublabel,
+  unit,
+  accent = false,
+  children,
 }: {
   label: string;
+  icon: ComponentType<{ className?: string }>;
   value: string;
-  sublabel?: string;
+  unit?: string;
+  // The amber "highlight" tile (the design uses it for the streak).
+  accent?: boolean;
+  children?: ReactNode;
 }) {
-  const Icon = ICONS[label as keyof typeof ICONS] ?? Clock3;
   return (
-    <div className="surface min-w-0 p-4">
-      <Icon className="mb-4 size-4 text-primary/80" strokeWidth={1.6} aria-hidden="true" />
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="mt-2 break-words font-heading text-[28px] leading-tight tracking-tight tabular-nums">{value}</p>
-      {sublabel && <p className="mt-1 text-xs text-muted-foreground">{sublabel}</p>}
+    <div className={cn("surface flex min-w-0 flex-col p-4", accent && "bg-secondary dark:bg-card")}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-medium tracking-[0.06em] text-muted-foreground uppercase">{label}</p>
+        <Icon className={cn("size-4 shrink-0", accent ? "text-amber" : "text-muted-foreground")} aria-hidden="true" />
+      </div>
+      <p className={cn("mt-3 font-heading text-[34px] leading-10 tracking-tight tabular-nums", accent && "font-semibold text-amber")}>
+        {value}
+        {unit && <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">{unit}</span>}
+      </p>
+      {children && <div className="mt-auto space-y-2 pt-3 text-[11px] text-muted-foreground">{children}</div>}
     </div>
   );
 }
