@@ -1,20 +1,27 @@
 # Shelf UI redesign
 
-The interface now uses paper surfaces, forest accents, terracotta actions, serif headings, and a shared spacing system. The existing Next.js app and its Supabase/Google Drive data flows remain in place.
+The interface follows the Stitch "personal reading hub and journal" designs: two themes from one system. **Editorial Sanctuary** (light) uses vellum surfaces, carbon ink, forest-green actions and an amber ribbon. **Obsidian Sanctuary** (dark) uses obsidian slate, parchment text and brass amber. Titles and prose use Newsreader; controls, labels and numbers use Plus Jakarta Sans. The Supabase and Google Drive data flows are unchanged.
 
-## Screens and behavior
+## Tokens
 
-- Library: next-chapter panel, shelf navigation, search, sorting, grid/list views, cover fallbacks, and separate book actions.
-- Navigation: desktop sidebar, mobile drawer, account footer, theme switching, and keyboard skip link.
-- Journal: source-linked note cards, refreshed server results, draft retention after rejected saves, and failed-delete recovery.
-- Stats: clearer summaries, reading-calendar panel, and monthly chart. Empty months no longer show positive bars.
-- Sign-in and dialogs: consistent typography, form spacing, labels, errors, and loading feedback.
-- Readers: responsive controls, accessible button labels, and page shortcuts that ignore dialog inputs. PDF canvas/text-layer positioning is preserved.
-- Shared UI: reduced-motion support, matching dark mode, and route loading placeholders.
+Colours live in `src/app/globals.css` as CSS variables, redefined under `.dark`. Beyond the shadcn set:
 
-## Inspiration
+- `sage`: text-safe forest green for links, icons and labels. `primary` is the button fill, which is too dark to read as text in the dark theme.
+- `ribbon` / `amber`: amber fill (progress, badges) and text-safe amber.
+- `well`: recessed frames behind covers and inputs.
+- `.surface`, `.surface-lift`, `.eyebrow`, `.meta`, `.tag`: shared card, hover, label and chip styles.
 
-[Readwise Reader](https://readwise.io/read) and its [long-form reading layout guidance](https://docs.readwise.io/reader/guides/workflows/longform-reading) informed the emphasis on a calm reading space and visible progress. Shelf's artwork and book fallback treatments are implemented locally with CSS and components.
+## Screens
+
+- **Frame:** a sidebar with upload, Shelf, Active reader, Statistics, Journal and Settings. On desktop it collapses to an icon rail; the choice is kept in the `shelf-sidebar` cookie so the server renders the right width. On mobile it opens as a drawer from the top bar, which also holds search, the streak and the account menu.
+- **Library:** greeting, daily quote, currently reading cards, format/shelf/sort filters, and one shelf per category (grid or list).
+- **Journal:** an inline writing desk (standalone or linked to a book), tabs for all / in-book / standalone / highlights, and books ranked by entries.
+- **Reader:** focus timer, today's goal, reading controls, a page card sized to the chosen column width, and a progress ribbon. EPUB typography comes from Settings.
+- **Statistics:** goal, time, month, week and streak tiles, the yearly heatmap with summary figures, and monthly hours with the peak month in amber.
+- **Settings:** reader typography with a live preview, theme, and daily/yearly goals, saved to `user_preferences`.
+- **Sign-in:** brand panel and Google sign-in, with only claims that are true of Shelf.
+
+Features shown in the Stitch screens but not built yet are listed in [FEATURE-BACKLOG.md](FEATURE-BACKLOG.md).
 
 ## Checks
 
@@ -24,8 +31,6 @@ npm run test:ui
 npm run build
 ```
 
-The rendering suite uses the installed TypeScript and React packages; no additional testing dependencies are required. It checks actual component markup, reading links, controls, cover sources, active navigation, empty states, and annotation-location links. It does not exercise browser clicks or real integrations.
-
-No local Supabase/Google environment or connected browser was available during this redesign. Before treating it as end-to-end verified, check desktop/mobile layouts, theme switching, sorting, drawer/menu/dialog interactions, sign-in, uploads, PDF/EPUB reading, annotations, progress, completion, and sign-out against a configured development environment.
+The rendering suite compiles the actual components and checks their markup, links, controls and helpers. It does not click through a browser or reach Supabase or Google Drive. Before treating a change as verified end to end, check desktop and mobile layouts in both themes, sidebar collapse, the drawer, uploads, PDF and EPUB reading, annotations, journal entries, settings and sign-out against a configured environment.
 
 The earlier backend recommendations are bookmarked in [REVIEW-BOOKMARK.md](REVIEW-BOOKMARK.md).

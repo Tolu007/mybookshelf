@@ -192,3 +192,18 @@ alter table public.annotations alter column location drop not null;
 alter table public.annotations drop constraint if exists annotations_book_required_check;
 alter table public.annotations add constraint annotations_book_required_check
   check (type = 'note' or (book_id is not null and location is not null));
+
+-- One row per user: reading typography and goals from the Settings page.
+-- Stored as JSON so new options don't need a migration; the app validates
+-- and fills defaults on read (src/lib/preferences.ts).
+create table if not exists public.user_preferences (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  preferences jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_preferences enable row level security;
+
+drop policy if exists "own preferences" on public.user_preferences;
+create policy "own preferences" on public.user_preferences
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

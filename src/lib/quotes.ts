@@ -5,11 +5,11 @@ export const QUOTES: Quote[] = [
   { text: "Formal education will make you a living; self-education will make you a fortune." },
 ];
 
-// Same quote all day, rotating at local midnight, so it feels intentional
-// rather than flickering on every refresh.
-export function quoteOfTheDay(date = new Date()): Quote {
+// Same quote all day, rotating at midnight, so it feels intentional rather
+// than flickering on every refresh.
+export function quoteIndexForDay(date = new Date()) {
   const dayNumber = Math.floor(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
   );
-  return QUOTES[dayNumber % QUOTES.length];
+  return dayNumber % QUOTES.length;
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { ChevronLeft, ChevronRight, Highlighter, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ReaderToolbar } from "@/components/readers/reader-toolbar";
+import { ReaderProgress, ReaderToolbar } from "@/components/readers/reader-toolbar";
 import { AnnotationsPanel } from "@/components/readers/annotations-panel";
 import { AddNoteButton } from "@/components/readers/add-note-button";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
@@ -28,11 +28,15 @@ export function PdfReader({
   title,
   initialLocation,
   isFinished: initialIsFinished,
+  dailyGoalMinutes,
+  minutesBeforeSession,
 }: {
   bookId: string;
   title: string;
   initialLocation: string | null;
   isFinished: boolean;
+  dailyGoalMinutes: number | null;
+  minutesBeforeSession: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -113,7 +117,7 @@ export function PdfReader({
         div.style.top = `${rect.y * height}px`;
         div.style.width = `${rect.width * width}px`;
         div.style.height = `${rect.height * height}px`;
-        div.style.background = "rgba(177, 80, 46, 0.35)";
+        div.style.background = "rgba(217, 119, 54, 0.35)";
         div.style.borderRadius = "2px";
         layer.appendChild(div);
       }
@@ -222,12 +226,19 @@ export function PdfReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationsVersion, loadHighlights, numPages]);
 
+  // Re-fit the page whenever its container changes width: window resizes,
+  // but also the sidebar collapsing or expanding.
   useEffect(() => {
-    function onResize() {
+    const container = containerRef.current;
+    if (!container) return;
+    let lastWidth = container.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (container.clientWidth === lastWidth) return;
+      lastWidth = container.clientWidth;
       void renderPage(pageNumber);
-    }
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
   }, [pageNumber, renderPage]);
 
   // Selecting text in the invisible layer saves it as a highlight, scoped to
@@ -334,12 +345,15 @@ export function PdfReader({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <ReaderToolbar
         title={title}
+        format="pdf"
         elapsedSeconds={elapsedSeconds}
         isFinished={isFinished}
         onMarkFinished={markFinished}
+        dailyGoalMinutes={dailyGoalMinutes}
+        minutesBeforeSession={minutesBeforeSession}
       >
         <Button
           variant="ghost"
@@ -350,7 +364,7 @@ export function PdfReader({
         >
           <ChevronLeft />
         </Button>
-        <span className="text-sm text-muted-foreground tabular-nums">
+        <span className="min-w-16 text-center text-xs font-semibold text-muted-foreground tabular-nums">
           {pageNumber} / {numPages || "…"}
         </span>
         <Button
@@ -362,6 +376,7 @@ export function PdfReader({
         >
           <ChevronRight />
         </Button>
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         <Button
           variant="ghost"
           size="icon-sm"
@@ -371,7 +386,7 @@ export function PdfReader({
         >
           <ZoomOut />
         </Button>
-        <span className="text-sm text-muted-foreground tabular-nums">
+        <span className="min-w-12 text-center text-xs font-semibold text-muted-foreground tabular-nums">
           {Math.round(zoomLevel * 100)}%
         </span>
         <Button
@@ -383,6 +398,7 @@ export function PdfReader({
         >
           <ZoomIn />
         </Button>
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         <Button
           variant={highlightMode ? "default" : "ghost"}
           size="icon-sm"
@@ -410,7 +426,7 @@ export function PdfReader({
       </ReaderToolbar>
       <div
         ref={containerRef}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/30 p-4"
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-secondary/60 p-4"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -420,7 +436,7 @@ export function PdfReader({
           setLoadAttempt((attempt) => attempt + 1);
         }} />
         <div className="relative">
-          <canvas ref={canvasRef} className="rounded-sm shadow-lg" />
+          <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
           <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
           <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
           <button
@@ -437,6 +453,10 @@ export function PdfReader({
           />
         </div>
       </div>
+      <ReaderProgress
+        percent={numPages ? (pageNumber / numPages) * 100 : 0}
+        label={numPages ? `Page ${pageNumber} of ${numPages} · ${Math.round((pageNumber / numPages) * 100)}%` : "Opening…"}
+      />
     </div>
   );
 }

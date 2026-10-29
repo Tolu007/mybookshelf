@@ -32,17 +32,23 @@ const { ImageConfigContext } = require("next/dist/shared/lib/image-config-contex
 const { imageConfigDefault } = require("next/dist/shared/lib/image-config");
 const imageConfig = { ...imageConfigDefault, ...require("../next.config.ts").default.images };
 const { BookCard } = require("../src/components/book-card.tsx");
-const { ReadingHero } = require("../src/components/reading-hero.tsx");
-const { LibraryCollection } = require("../src/components/library-collection.tsx");
-const { SidebarNav } = require("../src/components/sidebar/sidebar-nav.tsx");
+const { ReadingCard } = require("../src/components/library/reading-card.tsx");
+const { LibraryShelves } = require("../src/components/library/library-shelves.tsx");
+const { LibraryFilters } = require("../src/components/library/library-filters.tsx");
+const { SidebarContent } = require("../src/components/shell/sidebar-content.tsx");
 const { JournalList } = require("../src/components/journal/journal-list.tsx");
-const { NewNoteDialog } = require("../src/components/journal/new-note-dialog.tsx");
+const { JournalComposer } = require("../src/components/journal/journal-composer.tsx");
+const library = require("../src/lib/library.ts");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
 const { ReaderLoadStatus } = require("../src/components/readers/reader-load-status.tsx");
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
+const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
+const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
+const preferences = require("../src/lib/preferences.ts");
+const statsAggregate = require("../src/lib/stats-aggregate.ts");
 
 const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} };
 function render(element, pathname = "/", query = "") {
@@ -53,7 +59,8 @@ function render(element, pathname = "/", query = "") {
 }
 const h = React.createElement;
 const book = { id: "book-1", title: "A thoughtful book", author: "A Reader", cover_url: null, format: "epub", want_to_read: false, is_favorite: false, category_id: null };
-const note = { id: "note-1", note: "An idea worth keeping.", location: "epubcfi(/6/2[chapter]!/4/1:0)", createdAt: "2026-10-11T12:00:00Z", book: { id: book.id, title: book.title, coverUrl: null } };
+const note = { id: "note-1", kind: "note", note: "An idea worth keeping.", excerpt: null, location: "epubcfi(/6/2[chapter]!/4/1:0)", createdAt: "2026-10-11T12:00:00Z", book: { id: book.id, title: book.title, format: "epub" } };
+const shelfBook = (overrides) => ({ ...book, finished_at: null, added_at: "2026-01-01T00:00:00Z", percent: null, last_read_at: null, ...overrides });
 
 test("book controls stay outside reading links and all links target the book", () => {
   const html = render(h(BookCard, { book }));
@@ -84,50 +91,95 @@ test("embedded and remote covers render without changing reading links", () => {
   }
 });
 
-test("reading hero renders an honest empty state or resumes the actual current book", () => {
-  const empty = render(h(ReadingHero));
-  assert.match(empty, /A quieter corner/);
-  assert.doesNotMatch(empty, /Continue reading/);
-  const current = render(h(ReadingHero, { current: { book, percent: 42.4 } }));
-  assert.match(current, /42% read/);
-  assert.match(current, /href="\/read\/book-1"/);
-  assert.match(current, /Continue reading/);
+test("reading card resumes the actual book and shows progress honestly", () => {
+  const html = render(h(ReadingCard, { book, percent: 42.4, location: "epubcfi(/6/2)", categoryName: null, lastReadLabel: "2 hours ago", notes: 1, highlights: 3, primary: true }));
+  assert.match(html, /42% through/);
+  assert.match(html, /aria-valuenow="42"/);
+  assert.match(html, /href="\/read\/book-1"/);
+  assert.match(html, /Resume/);
+  assert.match(html, /> 1 note</);
+  assert.doesNotMatch(html, /epubcfi/);
+  const pdf = render(h(ReadingCard, { book: { ...book, format: "pdf" }, percent: 10, location: "12", categoryName: "Essays", lastReadLabel: null, notes: 0, highlights: 0 }));
+  assert.match(pdf, /Page 12/);
+  assert.match(pdf, /Essays/);
+  assert.match(pdf, /Continue/);
 });
 
-test("collection has labeled sorting and view controls, and keeps input order by default", () => {
-  const html = render(h(LibraryCollection, { books: [book, { ...book, id: "book-2", title: "Another book" }], categories: [] }));
-  assert.match(html, /2 books in this collection/);
-  assert.match(html, /aria-label="Sort books"/);
+test("shelves have labeled view controls, keep input order, and keep filters in tab links", () => {
+  const books = [shelfBook({}), shelfBook({ id: "book-2", title: "Another book" })];
+  const html = render(h(LibraryShelves, { shelves: [{ id: "unshelved", name: "Unshelved", books }], tabs: [{ id: "unshelved", name: "Unshelved", count: 2 }], params: { q: "book" }, categories: [] }));
+  assert.match(html, /2 books across 1 shelf/);
   assert.match(html, /aria-label="Grid view" aria-pressed="true"/);
   assert.match(html, /aria-label="List view" aria-pressed="false"/);
-  assert.ok(html.indexOf('/read/book-1') < html.indexOf('/read/book-2'));
+  assert.match(html, /href="\/\?q=book&amp;category=unshelved"/);
+  assert.ok(html.indexOf("/read/book-1") < html.indexOf("/read/book-2"));
 });
 
-test("navigation preserves shelf, category, journal, and stats routes and active state", () => {
-  const html = render(h(SidebarNav, { categories: [{ id: "category-1", name: "Fiction" }] }), "/", "shelf=favorites");
-  const favoritesLink = (html.match(/<a\b[^>]*>/g) ?? []).find((tag) => tag.includes('href="/?shelf=favorites"'));
-  assert.ok(favoritesLink);
-  assert.match(favoritesLink, /aria-current="page"/);
-  assert.match(html, /href="\/\?category=category-1"/);
-  assert.match(html, /href="\/journal"/);
-  assert.match(html, /href="\/stats"/);
+test("library filters label sorting and keep other filters in format links", () => {
+  const html = render(h(LibraryFilters, { params: { shelf: "favorites", format: "pdf" }, formatCounts: { all: 3, epub: 2, pdf: 1 } }));
+  assert.match(html, /aria-label="Sort books"/);
+  assert.match(html, /aria-label="Show shelf"/);
+  assert.match(html, /href="\/\?shelf=favorites&amp;format=epub"/);
+  assert.match(html, /aria-current="page"[^>]*href="\/\?shelf=favorites&amp;format=pdf"/);
 });
 
-test("journal handles empty notes and links back to the exact annotation location", () => {
-  assert.match(render(h(JournalList, { initialNotes: [] })), /Good thoughts deserve a place/);
-  const html = render(h(JournalList, { initialNotes: [note] }));
+test("library helpers filter, sort, and group books into category shelves", () => {
+  const books = [
+    shelfBook({ id: "a", title: "Zeno", category_id: "c1", percent: 40, last_read_at: "2026-03-01" }),
+    shelfBook({ id: "b", title: "Aurelius", author: "Marcus", category_id: null, finished_at: "2026-02-01" }),
+    shelfBook({ id: "c", title: "Meditations", category_id: "missing", want_to_read: true, format: "pdf" }),
+  ];
+  assert.deepEqual(library.filterBooks(books, { shelf: "reading" }).map((b) => b.id), ["a"]);
+  assert.deepEqual(library.filterBooks(books, { q: "marcus" }).map((b) => b.id), ["b"]);
+  assert.deepEqual(library.filterBooks(books, { category: "unshelved" }).map((b) => b.id), ["b"]);
+  assert.deepEqual(library.filterByFormat(books, "pdf").map((b) => b.id), ["c"]);
+  assert.deepEqual(library.sortBooks(books, "title").map((b) => b.id), ["b", "c", "a"]);
+  assert.equal(library.sortBooks(books, "read")[0].id, "a");
+  const shelves = library.groupIntoShelves(books, [{ id: "c1", name: "Stoics" }]);
+  assert.deepEqual(shelves.map((shelf) => [shelf.name, shelf.books.map((b) => b.id)]), [["Stoics", ["a"]], ["Unshelved", ["b", "c"]]]);
+  assert.equal(library.bookStatus(books[0]), "reading");
+  assert.equal(library.bookStatus(books[1]), "finished");
+  assert.equal(library.bookStatus(books[2]), "want_to_read");
+  assert.equal(library.libraryHref({ q: "x", sort: "title" }, { sort: "" }), "/?q=x");
+});
+
+test("sidebar links every section, marks the active one, and labels the collapsed rail", () => {
+  const props = { categories: [], activeBookId: "book-1", streak: { current: 4, longest: 9 } };
+  const html = render(h(SidebarContent, { ...props, collapsed: false, onToggleCollapsed() {} }), "/journal");
+  for (const href of ["/", "/read/book-1", "/stats", "/journal", "/settings"]) assert.ok(html.includes('href="' + href + '"'), href);
+  const journalLink = (html.match(/<a\b[^>]*>/g) ?? []).find((tag) => tag.includes('href="/journal"'));
+  assert.match(journalLink, /aria-current="page"/);
+  assert.match(html, />4-day streak</);
+  assert.match(html, /aria-label="Collapse sidebar"/);
+  const collapsed = render(h(SidebarContent, { ...props, activeBookId: null, collapsed: true, onToggleCollapsed() {} }), "/");
+  assert.match(collapsed, /aria-label="Expand sidebar"/);
+  assert.match(collapsed, /aria-label="Upload book"/);
+  assert.match(collapsed, /class="sr-only">Statistics</);
+  assert.match(collapsed, /aria-disabled="true"[^>]*title="Open a book to start reading"/);
+});
+
+test("journal handles empty entries, standalone reflections, highlights, and exact locations", () => {
+  assert.match(render(h(JournalList, { initialEntries: [] })), /Good thoughts deserve a place/);
+  const standalone = { ...note, id: "note-2", note: "A thought of my own.", book: null, location: null };
+  const highlight = { ...note, id: "hl-1", kind: "highlight", note: null, excerpt: "A passage worth keeping." };
+  const html = render(h(JournalList, { initialEntries: [note, standalone, highlight] }));
   assert.match(html, /An idea worth keeping/);
   assert.match(html, /href="\/read\/book-1\?location=epubcfi/);
   assert.match(html, /aria-label="Delete note from A thoughtful book"/);
+  assert.match(html, /aria-label="Delete highlight from A thoughtful book"/);
+  assert.match(html, /Standalone reflection/);
+  assert.match(html, /aria-label="Delete entry"/);
+  assert.match(html, /A passage worth keeping/);
+  assert.match(html, /All entries<span[^>]*>3</);
 });
 
-test("new-note action is disabled until a book has a saved reading location", () => {
-  const html = render(h(NewNoteDialog, { booksInProgress: [] }));
-  assert.match(html, /disabled=""/);
-  assert.match(html, /Start reading a book first/);
-  const enabled = render(h(NewNoteDialog, { booksInProgress: [{ id: book.id, title: book.title, location: "1" }] }));
-  assert.match(enabled, /New note/);
-  assert.doesNotMatch(enabled, /disabled=""/);
+test("journal composer writes standalone entries and links books only when there are some", () => {
+  const html = render(h(JournalComposer, { books: [] }));
+  assert.match(html, /Writing desk/);
+  assert.match(html, /aria-checked="true"[^>]*>.*Standalone reflection/s);
+  assert.match(html, /disabled=""[^>]*title="Add a book to link entries to it"/);
+  const withBooks = render(h(JournalComposer, { books: [{ id: book.id, title: book.title, location: "1" }] }));
+  assert.doesNotMatch(withBooks, /Add a book to link entries to it/);
 });
 
 test("reader toolbar retains back navigation, reading controls, and finished state", () => {
@@ -137,6 +189,51 @@ test("reader toolbar retains back navigation, reading controls, and finished sta
   assert.match(html, /2m this session/);
   assert.match(html, /disabled=""/);
   assert.match(html, /Finished/);
+});
+
+test("reader toolbar shows today's goal including the current session, and a book progress ribbon", () => {
+  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", elapsedSeconds: 600, isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 10 }));
+  assert.match(html, /00:10:00/);
+  assert.match(html, /20\/40m/);
+  assert.match(html, /aria-label="Today&#x27;s reading goal"[^>]*aria-valuenow="50"/);
+  assert.match(html, /Finish book/);
+  assert.doesNotMatch(render(h(ReaderToolbar, { title: book.title, elapsedSeconds: 0, isFinished: false, onMarkFinished() {} })), /reading goal/);
+  const progress = render(h(ReaderProgress, { percent: 140, label: "Page 3 of 3" }));
+  assert.match(progress, /aria-valuenow="100"/);
+  assert.match(progress, /Page 3 of 3/);
+});
+
+test("preferences fall back to defaults for missing or invalid values and keep valid ones", () => {
+  assert.deepEqual(preferences.parsePreferences(null), preferences.DEFAULT_PREFERENCES);
+  const parsed = preferences.parsePreferences({
+    reader: { font: "garamond", fontSize: 99, lineHeight: 1.9, measure: 13, paper: "sepia", justify: "yes" },
+    goals: { dailyMinutes: 45, yearlyBooks: -2 },
+  });
+  assert.equal(parsed.reader.font, "garamond");
+  assert.equal(parsed.reader.fontSize, 18);
+  assert.equal(parsed.reader.lineHeight, 1.9);
+  assert.equal(parsed.reader.measure, 72);
+  assert.equal(parsed.reader.paper, "sepia");
+  assert.equal(parsed.reader.justify, false);
+  assert.deepEqual(parsed.goals, { dailyMinutes: 45, yearlyBooks: null });
+  assert.match(preferences.readerFontStylesheet("literata"), /^https:\/\/fonts\.googleapis\.com\/css2\?family=Literata/);
+});
+
+test("settings form offers real options only and saves only when something changed", () => {
+  const html = render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: h("p", null, "Profile card") }), "/settings");
+  assert.match(html, /role="radiogroup" aria-label="Typeface"/);
+  assert.match(html, /aria-label="Page colour"/);
+  assert.match(html, /Daily reading target/);
+  assert.match(html, /Profile card/);
+  assert.match(html, /disabled=""[^>]*>.*Save changes/s);
+  assert.doesNotMatch(html, /Readwise|Obsidian Markdown|LaTeX|Pomodoro/);
+});
+
+test("stats helpers find the peak weekday and count active days in range", () => {
+  const days = new Map([["2026-03-01", 30], ["2026-03-08", 90], ["2026-03-02", 20], ["2026-04-01", 0]]);
+  assert.deepEqual(statsAggregate.peakWeekday(days), { label: "Sundays", averageMinutes: 60 });
+  assert.equal(statsAggregate.peakWeekday(new Map()), null);
+  assert.equal(statsAggregate.countActiveDays(days, "2026-03-02", "2026-04-30"), 2);
 });
 
 test("zero reading data does not draw positive bars", () => {
@@ -164,8 +261,9 @@ test("monthly chart converts minutes to hours and scales bars against the labele
 test("sign-in screen renders without credentials and retains its Google action", () => {
   const html = render(h(LoginPage), "/login");
   assert.match(html, /Continue with Google/);
-  assert.match(html, /Make yourself at home/);
-  assert.match(html, /Your PDFs and EPUBs/);
+  assert.match(html, /Enter your library/);
+  assert.match(html, /Books stay in your Drive/);
+  assert.doesNotMatch(html, /SQLite|Telemetry|passkey/i);
 });
 
 test("reader shows download percentage, unknown size, preparation, and useful errors", () => {

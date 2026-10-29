@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A personal online library for reading across every device.",
     start_url: "/",
     display: "standalone",
-    background_color: "#fbf7f0",
-    theme_color: "#b1502e",
+    background_color: "#fcfaf6",
+    theme_color: "#2d5a46",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },

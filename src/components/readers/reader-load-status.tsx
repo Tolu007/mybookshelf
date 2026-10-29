@@ -44,8 +44,8 @@ export function ReaderLoadStatus({ state, onRetry }: { state: ReaderLoadState; o
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/95 p-6">
-      <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-sm" role={error ? "alert" : "status"}>
-        {error ? <CircleAlert className="mb-4 size-7 text-destructive" /> : <BookOpen className="mb-4 size-7 text-primary" />}
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-card)]" role={error ? "alert" : "status"}>
+        {error ? <CircleAlert className="mb-4 size-7 text-destructive" /> : <BookOpen className="mb-4 size-7 text-sage" />}
         <h2 className="text-lg font-semibold">{error ? "Couldn't open your book" : state.phase === "opening" ? "Preparing your book" : "Downloading your book"}</h2>
         {error ? (
           <>

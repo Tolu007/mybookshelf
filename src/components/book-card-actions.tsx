@@ -48,19 +48,21 @@ export function BookCardActions({
       }
     };
   }
+
+  const buttonClass =
+    "rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60";
+
   return (
-    <div className="absolute top-2 left-2 flex gap-1">
+    <div className="relative flex items-center gap-0.5">
       <button
         type="button"
         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         aria-pressed={isFavorite}
         disabled={saving}
         onClick={toggle("is_favorite", !isFavorite, setIsFavorite)}
-        className="rounded-lg bg-background/90 p-2 shadow-xs backdrop-blur-sm transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-ring"
+        className={buttonClass}
       >
-        <Heart
-          className={cn("size-3.5", isFavorite ? "fill-primary text-primary" : "text-muted-foreground")}
-        />
+        <Heart className={cn("size-3.5", isFavorite && "fill-amber text-amber")} />
       </button>
       <button
         type="button"
@@ -68,13 +70,11 @@ export function BookCardActions({
         aria-pressed={wantToRead}
         disabled={saving}
         onClick={toggle("want_to_read", !wantToRead, setWantToRead)}
-        className="rounded-lg bg-background/90 p-2 shadow-xs backdrop-blur-sm transition-colors hover:bg-background focus-visible:outline-2 focus-visible:outline-ring"
+        className={buttonClass}
       >
-        <Bookmark
-          className={cn("size-3.5", wantToRead ? "fill-primary text-primary" : "text-muted-foreground")}
-        />
+        <Bookmark className={cn("size-3.5", wantToRead && "fill-amber text-amber")} />
       </button>
-      {error && <span role="alert" className="absolute top-full left-0 mt-1 w-36 rounded-lg bg-background px-2 py-1 text-[10px] text-destructive shadow-sm">{error}</span>}
+      {error && <span role="alert" className="absolute bottom-full left-0 mb-1 w-36 rounded-md border border-border bg-popover px-2 py-1 text-[10px] text-destructive shadow-sm">{error}</span>}
     </div>
   );
 }

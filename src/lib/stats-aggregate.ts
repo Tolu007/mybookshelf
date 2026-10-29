@@ -1,4 +1,4 @@
-import { eachDayOfInterval, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
+import { eachDayOfInterval, endOfWeek, format, startOfWeek } from "date-fns";
 
 export type SessionRow = { local_date: string; duration_seconds: number };
 
@@ -98,12 +98,33 @@ export function yearStartIso(year: number) {
   return format(new Date(year, 0, 1), "yyyy-MM-dd");
 }
 
-export function monthStartIso() {
-  return format(startOfMonth(new Date()), "yyyy-MM-dd");
-}
-
 export function formatMinutes(minutes: number) {
   const total = Math.round(minutes);
   if (total < 60) return `${total}m`;
   return `${Math.floor(total / 60)}h ${total % 60}m`;
+}
+
+const WEEKDAYS = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+
+// The weekday with the most reading, and its average minutes on the days
+// you read. Null when there's no reading yet.
+export function peakWeekday(dailyMinutes: Map<string, number>) {
+  const totals = Array.from({ length: 7 }, () => ({ minutes: 0, days: 0 }));
+  for (const [dateKey, minutes] of dailyMinutes) {
+    if (minutes <= 0) continue;
+    const day = new Date(`${dateKey}T00:00:00`).getDay();
+    totals[day].minutes += minutes;
+    totals[day].days += 1;
+  }
+  const best = totals.reduce((top, entry, day) => (entry.minutes > totals[top].minutes ? day : top), 0);
+  if (totals[best].minutes === 0) return null;
+  return { label: WEEKDAYS[best], averageMinutes: totals[best].minutes / totals[best].days };
+}
+
+export function countActiveDays(dailyMinutes: Map<string, number>, fromDate: string, toDate: string) {
+  let count = 0;
+  for (const [dateKey, minutes] of dailyMinutes) {
+    if (minutes > 0 && dateKey >= fromDate && dateKey <= toDate) count += 1;
+  }
+  return count;
 }

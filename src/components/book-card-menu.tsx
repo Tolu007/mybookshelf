@@ -68,7 +68,7 @@ export function BookCardMenu({
               variant="ghost"
               size="icon-sm"
               aria-label="Book options"
-              className="bg-background/85 backdrop-blur-sm"
+              className="border border-border bg-popover/90 shadow-sm backdrop-blur-sm"
             />
           }
         >
