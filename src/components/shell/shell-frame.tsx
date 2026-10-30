@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { SidebarContent } from "@/components/shell/sidebar-content";
 import { TopBar, type ShellUser } from "@/components/shell/top-bar";
+import { ShellMenuContext } from "@/components/shell/shell-menu";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,8 @@ export function ShellFrame({
 }: {
   children: ReactNode;
   initialCollapsed: boolean;
-  // Readers fill the viewport and manage their own scrolling.
+  // Readers fill the viewport, manage their own scrolling, and replace the
+  // top bar with their own header to leave more room for the page.
   fill: boolean;
   user: ShellUser;
   streak: { current: number; longest: number };
@@ -27,6 +29,7 @@ export function ShellFrame({
 }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const openMenu = useCallback(() => setMobileOpen(true), []);
 
   function toggleCollapsed() {
     const next = !collapsed;
@@ -51,13 +54,13 @@ export function ShellFrame({
         <SidebarContent collapsed={collapsed} onToggleCollapsed={toggleCollapsed} {...shared} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar user={user} streak={streak.current} onOpenMenu={() => setMobileOpen(true)} />
+        {!fill && <TopBar user={user} streak={streak.current} onOpenMenu={openMenu} />}
         <main
           id="main-content"
           tabIndex={-1}
           className={cn("min-h-0 min-w-0 flex-1 outline-none", fill ? "flex flex-col overflow-hidden" : "overflow-y-auto")}
         >
-          {children}
+          <ShellMenuContext.Provider value={openMenu}>{children}</ShellMenuContext.Provider>
         </main>
       </div>
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

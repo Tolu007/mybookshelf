@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { ArrowLeft, Check, Flag, Hourglass } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Flag, Hourglass, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionTimer } from "@/components/readers/session-timer";
 import type { ReadingSession } from "@/hooks/use-reading-session";
 import type { PomodoroView } from "@/hooks/use-pomodoro";
+import { useOpenShellMenu } from "@/components/shell/shell-menu";
 import { cn } from "@/lib/utils";
 
 // The floating bar above the page: session and goal on the left, where you
@@ -44,10 +45,17 @@ export function ReaderToolbar({
 }) {
   const todayMinutes = Math.floor(minutesBeforeSession + (session.savedSeconds + session.elapsedSeconds) / 60);
   const goalPercent = dailyGoalMinutes ? Math.min(100, (todayMinutes / dailyGoalMinutes) * 100) : 0;
+  // The reader has no top bar, so on phones the drawer opens from here.
+  const openMenu = useOpenShellMenu();
 
   return (
     <header className="z-20 mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-border bg-popover/95 px-2.5 py-2 shadow-[var(--shadow-card)] backdrop-blur-md sm:mx-6 sm:mt-4 sm:px-3">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        {openMenu && (
+          <Button variant="ghost" size="icon-sm" onClick={openMenu} aria-label="Open navigation menu" className="text-muted-foreground md:hidden">
+            <Menu />
+          </Button>
+        )}
         <Link href="/" aria-label="Back to your library" title="Back to your library" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
           <ArrowLeft className="size-4" />
         </Link>
@@ -93,8 +101,38 @@ export function ReaderToolbar({
   );
 }
 
+const SCRUBBER_STORAGE_KEY = "shelf-reader-progress";
+
+// Remembers (per device) whether the progress bar was collapsed.
+function useCollapsedScrubber() {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      // localStorage is only readable after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCollapsed(localStorage.getItem(SCRUBBER_STORAGE_KEY) === "collapsed");
+    } catch {
+      // Storage unavailable: start expanded.
+    }
+  }, []);
+
+  function toggle() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem(SCRUBBER_STORAGE_KEY, next ? "collapsed" : "expanded");
+    } catch {
+      // Still collapses for this visit.
+    }
+  }
+
+  return [collapsed, toggle] as const;
+}
+
 // The position line along the bottom: progress, chapter markers, and the
-// reading-speed estimate. Clicking the line jumps there.
+// reading-speed estimate. Clicking the line jumps there. It collapses to a
+// slim progress line.
 export function ReaderScrubber({
   percent,
   markers = [],
@@ -115,6 +153,7 @@ export function ReaderScrubber({
   position: string;
 }) {
   const clamped = Math.min(100, Math.max(0, percent));
+  const [collapsed, toggleCollapsed] = useCollapsedScrubber();
 
   function seekTo(clientX: number, target: HTMLElement) {
     if (!onSeek) return;
@@ -129,6 +168,20 @@ export function ReaderScrubber({
     else if (event.key === "ArrowLeft") onSeek(Math.max(0, clamped - step) / 100);
     else return;
     event.preventDefault();
+  }
+
+  if (collapsed) {
+    return (
+      <footer className="flex shrink-0 items-center gap-3 border-t border-border bg-popover/90 py-1 pr-2 pl-4 backdrop-blur-md sm:pl-6">
+        <div role="progressbar" aria-label="Book position" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clamped)} aria-valuetext={`${Math.round(clamped)}% · ${position}`} className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+          <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${clamped}%` }} />
+        </div>
+        <span className="shrink-0 text-[11px] font-semibold text-muted-foreground tabular-nums">{Math.round(clamped)}%</span>
+        <Button variant="ghost" size="icon-xs" aria-label="Show reading progress" aria-expanded={false} title="Show reading progress" onClick={toggleCollapsed} className="text-muted-foreground">
+          <ChevronUp />
+        </Button>
+      </footer>
+    );
   }
 
   return (
@@ -166,6 +219,9 @@ export function ReaderScrubber({
         <div className="flex items-center gap-4">
           {chapter && <span>Chapter: <strong className="text-foreground">{chapter}</strong></span>}
           <span className="font-bold text-foreground tabular-nums">{position}</span>
+          <Button variant="ghost" size="icon-xs" aria-label="Hide reading progress" aria-expanded={true} title="Hide reading progress" onClick={toggleCollapsed} className="-mr-2 text-muted-foreground">
+            <ChevronDown />
+          </Button>
         </div>
       </div>
     </footer>
