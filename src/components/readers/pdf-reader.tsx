@@ -15,6 +15,7 @@ import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 import type { Preferences } from "@/lib/preferences";
+import { MIN_SAMPLE_WORDS, countWords, formatTimeLeft, wordsPerMinute } from "@/lib/reading-speed";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -33,6 +34,7 @@ export function PdfReader({
   dailyGoalMinutes,
   minutesBeforeSession,
   timer,
+  averageWpm,
 }: {
   bookId: string;
   title: string;
@@ -41,6 +43,8 @@ export function PdfReader({
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
   timer: Preferences["timer"];
+  // From past sessions; used until this session has measured enough.
+  averageWpm: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,7 +64,11 @@ export function PdfReader({
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
-  const { markActivity } = session;
+  const { markActivity, pageTurn, notePageWords } = session;
+  // Word counts of pages rendered so far, for speed and time left.
+  const pageWordsRef = useRef(new Map<number, number>());
+  const previousPageRef = useRef<number | null>(null);
+  const [wordsPerPage, setWordsPerPage] = useState<number | null>(null);
   useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
   const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   const saveProgress = useProgressSync(bookId);
@@ -194,6 +202,13 @@ export function PdfReader({
         textLayerEl.style.setProperty("--scale-round-x", "1px");
         textLayerEl.style.setProperty("--scale-round-y", "1px");
         const textContent = await pdfPage.getTextContent();
+        const words = countWords(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+        if (!pageWordsRef.current.has(page)) {
+          pageWordsRef.current.set(page, words);
+          const counts = [...pageWordsRef.current.values()].filter((count) => count > 0);
+          setWordsPerPage(counts.length ? Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length) : null);
+        }
+        if (page === previousPageRef.current) notePageWords(words);
         const textLayer = new pdfjsLib.TextLayer({
           textContentSource: textContent,
           container: textLayerEl,
@@ -216,13 +231,15 @@ export function PdfReader({
         if (pdfRef.current === pdf) setLoadState(readerErrorState(error));
       }
     },
-    [zoomLevel]
+    [zoomLevel, notePageWords]
   );
 
   // A page turn is reading activity (for auto-pause).
   useEffect(() => {
-    markActivity();
-  }, [pageNumber, markActivity]);
+    const previous = previousPageRef.current;
+    previousPageRef.current = pageNumber;
+    pageTurn(pageWordsRef.current.get(pageNumber) ?? null, previous !== null && pageNumber > previous);
+  }, [pageNumber, pageTurn]);
 
   useEffect(() => {
     if (numPages === 0) return;
@@ -354,6 +371,15 @@ export function PdfReader({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pageNumber, goToPage]);
 
+  const wpm =
+    session.speedSample.words >= MIN_SAMPLE_WORDS
+      ? wordsPerMinute(session.speedSample.words, session.speedSample.seconds)
+      : averageWpm;
+  const bookMinutesLeft = wpm && wordsPerPage && numPages ? ((numPages - pageNumber) * wordsPerPage) / wpm : null;
+  const speedDetail = wpm
+    ? [`${wpm} wpm`, bookMinutesLeft !== null ? `~${formatTimeLeft(bookMinutesLeft)} left in book` : null].filter(Boolean).join(" · ")
+    : null;
+
   async function markFinished() {
     const response = await fetch(`/api/books/${bookId}/finish`, { method: "POST" });
     if (response.ok) setIsFinished(true);
@@ -478,6 +504,7 @@ export function PdfReader({
       <ReaderProgress
         percent={numPages ? (pageNumber / numPages) * 100 : 0}
         label={numPages ? `Page ${pageNumber} of ${numPages} · ${Math.round((pageNumber / numPages) * 100)}%` : "Opening…"}
+        detail={speedDetail}
       />
     </div>
   );

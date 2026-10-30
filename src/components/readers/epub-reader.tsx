@@ -17,6 +17,7 @@ import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadSta
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 import { FONT_SIZE_RANGE, PAPERS, READER_FONTS, columnWidthPx, readerFontStylesheet, type Preferences } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
+import { MIN_SAMPLE_WORDS, countWords, formatTimeLeft, wordsPerMinute } from "@/lib/reading-speed";
 
 const SWIPE_MIN_DISTANCE = 60;
 // Horizontal padding inside the page card, on each side.
@@ -54,6 +55,7 @@ export function EpubReader({
   dailyGoalMinutes,
   minutesBeforeSession,
   timer,
+  averageWpm,
   typography,
 }: {
   bookId: string;
@@ -63,6 +65,8 @@ export function EpubReader({
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
   timer: Preferences["timer"];
+  // From past sessions; used until this session has measured enough.
+  averageWpm: number | null;
   typography: Typography;
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -79,13 +83,13 @@ export function EpubReader({
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [position, setPosition] = useState<{ percent: number; chapterPage: number | null; chapterPages: number | null }>({ percent: 0, chapterPage: null, chapterPages: null });
+  const [position, setPosition] = useState<{ percent: number; chapterPage: number | null; chapterPages: number | null; wordsPerPage: number | null }>({ percent: 0, chapterPage: null, chapterPages: null, wordsPerPage: null });
   const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
-  const { markActivity } = session;
+  const { markActivity, pageTurn } = session;
   useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
   const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   // Page turns happen inside epub.js callbacks set up once per book.
-  const markActivityRef = useRef(markActivity);
+  const pageTurnRef = useRef(pageTurn);
   const saveProgress = useProgressSync(bookId);
   const [notesOpen, setNotesOpen] = useNotesPanelState();
   const notesPanelId = useId();
@@ -96,8 +100,8 @@ export function EpubReader({
   }, [highlightMode]);
 
   useEffect(() => {
-    markActivityRef.current = markActivity;
-  }, [markActivity]);
+    pageTurnRef.current = pageTurn;
+  }, [pageTurn]);
 
   useEffect(() => {
     if (!viewerRef.current) return;
@@ -173,16 +177,28 @@ export function EpubReader({
       if (!cancelled) setLoadState(readerErrorState(error));
     });
 
+    // EPUBs have no fixed pages, so a page's words are estimated as the
+    // chapter's words over its pages at the current layout.
+    const sectionWords = new Map<string, number>();
+    let previousPage: { index: number; page: number } | null = null;
+
     rendition.on(
       "relocated",
-      (location: { start: { cfi: string; percentage: number; displayed?: { page: number; total: number } } }) => {
+      (location: { start: { cfi: string; percentage: number; href?: string; index?: number; displayed?: { page: number; total: number } } }) => {
         currentCfiRef.current = location.start.cfi;
-        markActivityRef.current();
+        const { href, index = 0, displayed } = location.start;
+        const chapterWords = href ? sectionWords.get(href) : undefined;
+        const wordsPerPage = chapterWords !== undefined && displayed?.total ? Math.round(chapterWords / displayed.total) : null;
+        const page = displayed?.page ?? 0;
+        const forward = previousPage !== null && (index > previousPage.index || (index === previousPage.index && page > previousPage.page));
+        previousPage = { index, page };
+        pageTurnRef.current(wordsPerPage, forward);
         const percent = Math.round(location.start.percentage * 10000) / 100;
         setPosition({
           percent,
-          chapterPage: location.start.displayed?.page ?? null,
-          chapterPages: location.start.displayed?.total ?? null,
+          chapterPage: displayed?.page ?? null,
+          chapterPages: displayed?.total ?? null,
+          wordsPerPage,
         });
         saveProgress({
           location: location.start.cfi,
@@ -210,9 +226,10 @@ export function EpubReader({
     // epub.js renders each section into its own iframe with its own document,
     // so swipe must be wired up fresh every time a new one is rendered —
     // touch events inside it never reach listeners on the outer page.
-    rendition.on("rendered", (_section: unknown, view: { document?: Document }) => {
+    rendition.on("rendered", (section: { href?: string }, view: { document?: Document }) => {
       const doc = view?.document;
       if (!doc) return;
+      if (section?.href) sectionWords.set(section.href, countWords(doc.body?.textContent ?? ""));
 
       let start: { x: number; y: number } | null = null;
 
@@ -297,6 +314,18 @@ export function EpubReader({
   }
 
   const paper = PAPERS[typography.paper];
+  const wpm =
+    session.speedSample.words >= MIN_SAMPLE_WORDS
+      ? wordsPerMinute(session.speedSample.words, session.speedSample.seconds)
+      : averageWpm;
+  const chapterMinutesLeft =
+    wpm && position.wordsPerPage && position.chapterPage && position.chapterPages
+      ? ((position.chapterPages - position.chapterPage) * position.wordsPerPage) / wpm
+      : null;
+  const speedDetail = wpm
+    ? [`${wpm} wpm`, chapterMinutesLeft !== null ? `~${formatTimeLeft(chapterMinutesLeft)} left in chapter` : null].filter(Boolean).join(" · ")
+    : null;
+
   const progressLabel = [
     position.chapterPage && position.chapterPages ? `Page ${position.chapterPage} of ${position.chapterPages} in chapter` : null,
     `${Math.round(position.percent)}% of book`,
@@ -386,7 +415,7 @@ export function EpubReader({
           onActivity={markActivity}
         />
       </div>
-      <ReaderProgress percent={position.percent} label={progressLabel} />
+      <ReaderProgress percent={position.percent} label={progressLabel} detail={speedDetail} />
     </div>
   );
 }

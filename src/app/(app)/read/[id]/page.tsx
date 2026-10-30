@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { loadPreferences } from "@/lib/preferences-server";
+import { loadAverageWpm } from "@/lib/reading-speed-server";
 import { PdfReader } from "@/components/readers/pdf-reader";
 import { EpubReader } from "@/components/readers/epub-reader";
 
@@ -30,10 +31,11 @@ export default async function ReadPage({
 
   if (!book) notFound();
 
-  const [{ data: progress }, preferences, { data: todaySessions }] = await Promise.all([
+  const [{ data: progress }, preferences, { data: todaySessions }, averageWpm] = await Promise.all([
     supabase.from("reading_progress").select("location").eq("book_id", id).maybeSingle(),
     loadPreferences(supabase, user.id),
     supabase.from("reading_sessions").select("duration_seconds").eq("local_date", format(new Date(), "yyyy-MM-dd")),
+    loadAverageWpm(supabase),
   ]);
 
   const sharedProps = {
@@ -45,6 +47,7 @@ export default async function ReadPage({
     isFinished: Boolean(book.finished_at),
     dailyGoalMinutes: preferences.goals.dailyMinutes,
     timer: preferences.timer,
+    averageWpm,
     minutesBeforeSession: (todaySessions ?? []).reduce((sum, row) => sum + row.duration_seconds, 0) / 60,
   };
 

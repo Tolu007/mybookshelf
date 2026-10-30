@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeft, Check, Flag } from "lucide-react";
+import { ArrowLeft, Check, Flag, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionTimer } from "@/components/readers/session-timer";
 import type { ReadingSession } from "@/hooks/use-reading-session";
@@ -73,13 +73,14 @@ export function ReaderToolbar({
 }
 
 // The amber ribbon along the bottom of the reader.
-export function ReaderProgress({ percent, label }: { percent: number; label: string }) {
+export function ReaderProgress({ percent, label, detail = null }: { percent: number; label: string; detail?: string | null }) {
   const clamped = Math.min(100, Math.max(0, percent));
   return (
     <footer className="flex shrink-0 items-center gap-3 border-t border-border bg-card/95 px-4 py-2 sm:px-6">
       <div role="progressbar" aria-label="Book progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clamped)} className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
         <div className="h-full rounded-full bg-ribbon transition-[width] duration-300" style={{ width: `${clamped}%` }} />
       </div>
+      {detail && <span className="meta hidden shrink-0 items-center gap-1 text-sage md:flex"><Gauge className="size-3" aria-hidden="true" /> {detail}</span>}
       <span className="meta shrink-0">{label}</span>
     </footer>
   );

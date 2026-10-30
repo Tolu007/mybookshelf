@@ -48,6 +48,8 @@ const LoginPage = require("../src/app/login/page.tsx").default;
 const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
 const { SessionTimer } = require("../src/components/readers/session-timer.tsx");
 const { ReaderNotesPanel, NotesPanelToggle } = require("../src/components/readers/reader-notes-panel.tsx");
+const speed = require("../src/lib/reading-speed.ts");
+const statsLib = require("../src/lib/stats.ts");
 const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
 const preferences = require("../src/lib/preferences.ts");
 const statsAggregate = require("../src/lib/stats-aggregate.ts");
@@ -226,6 +228,48 @@ test("session timer offers pause and stop while reading, resume when paused, and
   const withPomodoro = render(h(SettingsForm, { initial: { ...preferences.DEFAULT_PREFERENCES, timer: { ...preferences.DEFAULT_PREFERENCES.timer, pomodoro: true } }, profile: null }));
   assert.match(withPomodoro, /aria-label="Focus length"/);
   assert.doesNotMatch(render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: null })), /Focus length/);
+});
+
+test("reading speed counts words, ignores flips and long stays, and formats time left", () => {
+  assert.equal(speed.countWords("It was the best of times, it was the worst — of times."), 12);
+  assert.equal(speed.countWords("l’homme d'affaires well-known 2026"), 4);
+  assert.equal(speed.isPlausiblePage(300, 75), true);
+  assert.equal(speed.isPlausiblePage(300, 2), false);
+  assert.equal(speed.isPlausiblePage(300, 16 * 60), false);
+  assert.equal(speed.isPlausiblePage(300, 10), false);
+  assert.equal(speed.wordsPerMinute(600, 150), 240);
+  assert.equal(speed.wordsPerMinute(0, 150), null);
+  assert.equal(speed.formatTimeLeft(0.4), "under a minute");
+  assert.equal(speed.formatTimeLeft(12.4), "12 min");
+  assert.equal(speed.formatTimeLeft(125), "2h 5m");
+  const progress = render(h(ReaderProgress, { percent: 40, label: "Page 4 of 10", detail: "240 wpm · ~12 min left in book" }));
+  assert.match(progress, /240 wpm · ~12 min left in book/);
+});
+
+test("sessions are still recorded when the speed columns don't exist yet", async () => {
+  const inserts = [];
+  const supabase = {
+    from(table) {
+      const query = {
+        insert: async (row) => {
+          inserts.push(row);
+          return { error: table === "reading_sessions" && "words_read" in row ? { code: "PGRST204" } : null };
+        },
+        select: () => query,
+        eq: () => query,
+        single: async () => ({ data: { current_streak: 0, longest_streak: 0, last_read_date: "2026-10-30" }, error: null }),
+        update: () => query,
+      };
+      return query;
+    },
+  };
+  await statsLib.recordReadingSession(supabase, "user-1", {
+    bookId: "book-1", startedAt: "a", endedAt: "b", durationSeconds: 600, localDate: "2026-10-30", speed: { wordsRead: 2400, wordSeconds: 540 },
+  });
+  assert.equal(inserts.length, 2);
+  assert.equal(inserts[0].words_read, 2400);
+  assert.equal("words_read" in inserts[1], false);
+  assert.equal(inserts[1].duration_seconds, 600);
 });
 
 test("notes panel writes notes pinned to the current page and closes to nothing", () => {

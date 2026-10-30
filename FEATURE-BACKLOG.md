@@ -33,14 +33,14 @@ Suggested order: cheapest and most visible first.
 - [ ] **Copy / Define** in the selection popup.
 - [x] **Session journal side panel.** Collapsible notes panel beside the page (slide-over on phones): write notes pinned to the current page, see and jump to this book's notes, highlights and bookmarks.
 - [ ] **Chapter progress.** Chapter markers on the bottom bar, "Chapter 4 of 12", and "~12 min left in chapter". (The bar itself and "page x of y in chapter" shipped.)
-- [ ] **Reading speed.** Words or pages per minute, shown in the reader and on Stats.
+- [x] **Reading speed.** Words per minute measured from page turns, with time left in the chapter (EPUB) or book (PDF).
 - [ ] **Drop-cap chapter openings.**
 - [x] **Reader typography.** Typeface, size, line spacing, column width, page colour, justified text (EPUB).
 
 ## Stats
 
 - [x] **Yearly book goal.** "24 / 30 goal" tile with ahead/behind pace.
-- [ ] **Reading speed tile.** Pages per hour (needs page counts).
+- [x] **Reading speed on Stats.** Average words per minute for the year, in the Time invested tile.
 - [ ] **Best reading window.** The time of day you read most, from session start times.
 - [ ] **Genre donut.** Books by category.
 - [ ] **Finished-books table.** Completion date, time invested, sessions, pace.

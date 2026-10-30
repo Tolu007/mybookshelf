@@ -3,6 +3,7 @@ import { differenceInCalendarDays, format, getDaysInYear, startOfMonth, startOfW
 import { BookCheck, CalendarDays, Flame, Hourglass, TrendingDown, TrendingUp, Timer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { loadPreferences } from "@/lib/preferences-server";
+import { loadAverageWpm } from "@/lib/reading-speed-server";
 import { StatTile } from "@/components/stats/stat-tile";
 import { StreakHeatmap } from "@/components/stats/streak-heatmap";
 import { ReadingBarChart } from "@/components/stats/reading-bar-chart";
@@ -42,7 +43,7 @@ export default async function StatsPage() {
   // Last month may fall in the previous year (in January).
   const fetchFrom = lastMonthStart < yearStart ? lastMonthStart : yearStart;
 
-  const [{ data: stats }, { count: booksFinishedThisYear }, { data: sessions }, preferences] = await Promise.all([
+  const [{ data: stats }, { count: booksFinishedThisYear }, { data: sessions }, preferences, averageWpm] = await Promise.all([
     supabase.from("user_stats").select("current_streak, longest_streak").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("books")
@@ -51,6 +52,7 @@ export default async function StatsPage() {
       .lt("finished_at", new Date(year + 1, 0, 1).toISOString()),
     supabase.from("reading_sessions").select("local_date, duration_seconds").gte("local_date", fetchFrom),
     loadPreferences(supabase, user.id),
+    loadAverageWpm(supabase, { from: yearStart }),
   ]);
 
   const allRows = sessions ?? [];
@@ -104,6 +106,7 @@ export default async function StatsPage() {
         </StatTile>
         <StatTile label="Time invested" icon={Hourglass} value={`${yearTime.hours}h ${yearTime.minutes}m`}>
           <p>{Math.round(yearMinutes / daysElapsed)} min daily mean this year</p>
+          {averageWpm && <p className="text-sage">Average speed: {averageWpm} words / min</p>}
         </StatTile>
         <StatTile label={`This month (${format(now, "MMMM")})`} icon={CalendarDays} value={formatMinutes(monthMinutes)}>
           {monthChange === null ? (
