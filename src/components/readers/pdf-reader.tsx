@@ -473,7 +473,6 @@ export function PdfReader({
 
       <div className="flex min-h-0 flex-1 gap-6 px-3 py-3 sm:px-6 sm:py-4">
         <ReaderPage
-          eyebrow={place ? place.chapter.label : null}
           caption={author}
           pageLabel={numPages ? String(pageNumber) : null}
           onPrev={() => goToPage(pageNumber - 1)}
@@ -483,9 +482,12 @@ export function PdfReader({
           className="min-w-0 flex-1"
           style={paperStyle(paper.background, paper.color, paper.textured)}
         >
+          {/* Centred with auto margins rather than flex alignment: when the
+              page is taller (or, zoomed, wider) than the view, flex centring
+              pushes its top and left edges out of reach of the scrollbars. */}
           <div
             ref={containerRef}
-            className="relative flex h-full items-center justify-center overflow-auto p-4"
+            className="relative flex h-full overflow-auto p-4"
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
@@ -494,7 +496,7 @@ export function PdfReader({
               setNumPages(0);
               setLoadAttempt((attempt) => attempt + 1);
             }} />
-            <div className="relative">
+            <div className="relative m-auto">
               <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
               <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
               <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />

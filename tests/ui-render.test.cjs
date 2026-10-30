@@ -382,6 +382,7 @@ test("reader toolbar shows today's goal including the current and stopped sessio
   assert.match(line, /title="Ch. 2"[^>]*left:50%/);
   assert.match(line, /tabindex="-1"/);
   assert.match(render(h(ReaderScrubber, { percent: 10, position: "x", onSeek() {} })), /tabindex="0"/);
+  assert.match(line, /aria-label="Hide reading progress" aria-expanded="true"|aria-expanded="true"[^>]*aria-label="Hide reading progress"/);
 });
 
 test("preferences fall back to defaults for missing or invalid values and keep valid ones", () => {
