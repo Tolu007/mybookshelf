@@ -44,7 +44,7 @@ Suggested order: cheapest and most visible first.
 - [ ] **Best reading window.** The time of day you read most, from session start times.
 - [ ] **Genre donut.** Books by category.
 - [ ] **Finished-books table.** Completion date, time invested, sessions, pace.
-- [ ] **Year switcher.** 2024 / 2023 / All-time on the stats page.
+- [x] **Year switcher.** Every year since you started, plus All time (year-by-year chart).
 - [ ] **Export stats.** Download as CSV or JSON.
 
 ## Settings (beyond the first version)

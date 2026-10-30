@@ -40,7 +40,8 @@ const { JournalList } = require("../src/components/journal/journal-list.tsx");
 const { JournalComposer } = require("../src/components/journal/journal-composer.tsx");
 const library = require("../src/lib/library.ts");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
-const { ReadingBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
+const { ReadingBarChart, YearlyBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
+const { fetchAll } = require("../src/lib/supabase/fetch-all.ts");
 const { ReaderLoadStatus } = require("../src/components/readers/reader-load-status.tsx");
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
@@ -329,6 +330,33 @@ test("stats helpers find the peak weekday and count active days in range", () =>
   assert.deepEqual(statsAggregate.peakWeekday(days), { label: "Sundays", averageMinutes: 60 });
   assert.equal(statsAggregate.peakWeekday(new Map()), null);
   assert.equal(statsAggregate.countActiveDays(days, "2026-03-02", "2026-04-30"), 2);
+});
+
+test("year views find streaks within the period and total reading per year", () => {
+  const days = new Map([["2025-12-30", 10], ["2025-12-31", 10], ["2026-01-01", 10], ["2026-01-03", 5], ["2026-01-04", 0]]);
+  assert.equal(statsAggregate.longestStreakIn(days), 3);
+  assert.equal(statsAggregate.longestStreakIn(new Map()), 0);
+  assert.deepEqual(statsAggregate.buildYearlyTotals(new Map([["2023-05-01", 90], ["2025-02-01", 30]]), 2026), [
+    { year: 2023, minutes: 90 }, { year: 2024, minutes: 0 }, { year: 2025, minutes: 30 }, { year: 2026, minutes: 0 },
+  ]);
+  assert.deepEqual(statsAggregate.buildYearlyTotals(new Map(), 2026), [{ year: 2026, minutes: 0 }]);
+  const chart = render(h(YearlyBarChart, { dailyMinutes: new Map([["2025-01-01", 120], ["2026-01-01", 60]]), untilYear: 2026 }));
+  assert.match(chart, /title="2025: 2h 0m"[^>]*bg-ribbon/);
+  assert.match(chart, /title="2026: 1h 0m"/);
+});
+
+test("long result sets are fetched page by page until a short page", async () => {
+  const pages = [];
+  const rows = Array.from({ length: 5 }, (_, index) => index);
+  const result = await fetchAll(async (from, to) => {
+    pages.push([from, to]);
+    return { data: rows.slice(from, to + 1), error: null };
+  }, 2);
+  assert.deepEqual(result.data, rows);
+  assert.deepEqual(pages, [[0, 1], [2, 3], [4, 5]]);
+  const failed = await fetchAll(async () => ({ data: null, error: { message: "boom" } }));
+  assert.deepEqual(failed.data, []);
+  assert.ok(failed.error);
 });
 
 test("zero reading data does not draw positive bars", () => {
