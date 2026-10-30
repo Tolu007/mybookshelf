@@ -187,7 +187,7 @@ export function ReaderNotesPanel({
 
       <div className="my-4 space-y-2.5 rounded-xl bg-card p-3 dark:bg-secondary">
         <label htmlFor={inputId} className="flex items-center justify-between text-xs font-semibold text-sage">
-          <span className="flex items-center gap-1"><PencilLine className="size-3.5" aria-hidden="true" /> Write marginalia</span>
+          <span className="flex items-center gap-1"><PencilLine className="size-3.5" aria-hidden="true" /> Write your thoughts</span>
           {here && <span className="font-normal text-muted-foreground">{here} citation</span>}
         </label>
         <textarea

@@ -57,6 +57,7 @@ const { ReaderPage, paperStyle } = require("../src/components/readers/reader-pag
 const { Typecraft } = require("../src/components/readers/typecraft.tsx");
 const chapters = require("../src/lib/reader-chapters.ts");
 const { SessionTimer } = require("../src/components/readers/session-timer.tsx");
+const { ShellMenuContext } = require("../src/components/shell/shell-menu.ts");
 const { ReaderNotesPanel, NotesPanelToggle } = require("../src/components/readers/reader-notes-panel.tsx");
 const speed = require("../src/lib/reading-speed.ts");
 const statsLib = require("../src/lib/stats.ts");
@@ -229,6 +230,9 @@ test("reader toolbar retains back navigation, reading controls, and finished sta
   assert.match(html, /2m this session/);
   assert.match(html, /disabled=""/);
   assert.match(html, /Finished/);
+  assert.doesNotMatch(html, /Open navigation menu/);
+  const inShell = render(h(ShellMenuContext.Provider, { value() {} }, h(ReaderToolbar, { title: book.title, session: fakeSession(), isFinished: false, onMarkFinished() {} })));
+  assert.match(inShell, /aria-label="Open navigation menu"/);
 });
 
 test("session timer offers pause and stop while reading, resume when paused, and a new session once stopped", () => {
@@ -318,7 +322,7 @@ test("notes panel writes notes pinned to the current page, logs passages, and cl
   const open = render(h(ReaderNotesPanel, { ...props, open: true }));
   assert.match(open, /aria-label="Session journal"/);
   assert.match(open, /The Overstory • 1 note, 1 highlight/);
-  assert.match(open, /Write marginalia/);
+  assert.match(open, /Write your thoughts/);
   assert.match(open, /Page 12 citation/);
   assert.match(open, /Page 118/);
   assert.match(open, /A passage\./);

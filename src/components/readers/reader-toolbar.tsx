@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Flag, Hourglass } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Flag, Hourglass, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionTimer } from "@/components/readers/session-timer";
 import type { ReadingSession } from "@/hooks/use-reading-session";
 import type { PomodoroView } from "@/hooks/use-pomodoro";
+import { useOpenShellMenu } from "@/components/shell/shell-menu";
 import { cn } from "@/lib/utils";
 
 // The floating bar above the page: session and goal on the left, where you
@@ -44,10 +45,17 @@ export function ReaderToolbar({
 }) {
   const todayMinutes = Math.floor(minutesBeforeSession + (session.savedSeconds + session.elapsedSeconds) / 60);
   const goalPercent = dailyGoalMinutes ? Math.min(100, (todayMinutes / dailyGoalMinutes) * 100) : 0;
+  // The reader has no top bar, so on phones the drawer opens from here.
+  const openMenu = useOpenShellMenu();
 
   return (
     <header className="z-20 mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-border bg-popover/95 px-2.5 py-2 shadow-[var(--shadow-card)] backdrop-blur-md sm:mx-6 sm:mt-4 sm:px-3">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        {openMenu && (
+          <Button variant="ghost" size="icon-sm" onClick={openMenu} aria-label="Open navigation menu" className="text-muted-foreground md:hidden">
+            <Menu />
+          </Button>
+        )}
         <Link href="/" aria-label="Back to your library" title="Back to your library" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
           <ArrowLeft className="size-4" />
         </Link>
