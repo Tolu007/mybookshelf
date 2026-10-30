@@ -1,18 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
-import { ChevronLeft, ChevronRight, Highlighter, ZoomIn, ZoomOut } from "lucide-react";
+import { Highlighter, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ReaderProgress, ReaderToolbar } from "@/components/readers/reader-toolbar";
-import { AnnotationsPanel } from "@/components/readers/annotations-panel";
-import { AddNoteButton } from "@/components/readers/add-note-button";
+import { ReaderScrubber, ReaderToolbar } from "@/components/readers/reader-toolbar";
+import { ReaderPage, paperStyle } from "@/components/readers/reader-page";
+import { NotesPanelToggle, ReaderNotesPanel, useBookAnnotations, useNotesPanelState } from "@/components/readers/reader-notes-panel";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
+import { useIntervalChime } from "@/hooks/use-interval-chime";
+import { usePomodoro } from "@/hooks/use-pomodoro";
 import { useProgressSync } from "@/hooks/use-progress-sync";
+import { useDarkMode } from "@/hooks/use-dark-mode";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
+import type { Preferences } from "@/lib/preferences";
+import { MIN_SAMPLE_WORDS, countWords, formatTimeLeft, wordsPerMinute } from "@/lib/reading-speed";
+import { chapterAt, tidyChapters, type ReaderChapter } from "@/lib/reader-chapters";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -22,21 +28,54 @@ const SWIPE_MIN_DISTANCE = 60;
 
 type Rect = { x: number; y: number; width: number; height: number };
 type HighlightAnnotation = { type: string; location: string; rects: Rect[] | null };
+type OutlineItem = { title: string; dest: string | unknown[] | null; items: OutlineItem[] };
+
+// PDF locations are page numbers.
+function describePage(location: string) {
+  return /^\d+$/.test(location) ? "Page " + location : null;
+}
+
+// Chapters from the PDF's outline (bookmarks), mapped to page numbers.
+async function loadChapters(pdf: PDFDocumentProxy): Promise<ReaderChapter[]> {
+  const outline = ((await pdf.getOutline().catch(() => null)) ?? []) as OutlineItem[];
+  const items = outline.length > 1 ? outline : outline.flatMap((item) => [item, ...(item.items ?? [])]);
+  const entries = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const dest = typeof item.dest === "string" ? await pdf.getDestination(item.dest) : item.dest;
+        const ref = dest?.[0];
+        if (ref === undefined || ref === null) return [];
+        const pageIndex = typeof ref === "number" ? ref : await pdf.getPageIndex(ref as Parameters<PDFDocumentProxy["getPageIndex"]>[0]);
+        return [{ label: item.title, start: pageIndex + 1, position: pageIndex / pdf.numPages }];
+      } catch {
+        return [];
+      }
+    })
+  );
+  return tidyChapters(entries.flat());
+}
 
 export function PdfReader({
   bookId,
   title,
+  author,
   initialLocation,
   isFinished: initialIsFinished,
   dailyGoalMinutes,
   minutesBeforeSession,
+  timer,
+  averageWpm,
 }: {
   bookId: string;
   title: string;
+  author: string | null;
   initialLocation: string | null;
   isFinished: boolean;
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
+  timer: Preferences["timer"];
+  // From past sessions; used until this session has measured enough.
+  averageWpm: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -55,8 +94,21 @@ export function PdfReader({
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const { elapsedSeconds } = useReadingSession(bookId);
+  const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
+  const { markActivity, pageTurn, notePageWords } = session;
+  // Word counts of pages rendered so far, for speed and time left.
+  const pageWordsRef = useRef(new Map<number, number>());
+  const previousPageRef = useRef<number | null>(null);
+  const [wordsPerPage, setWordsPerPage] = useState<number | null>(null);
+  useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
+  const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   const saveProgress = useProgressSync(bookId);
+  const [notesOpen, setNotesOpen] = useNotesPanelState();
+  const notesPanelId = useId();
+  const closeNotes = useCallback(() => setNotesOpen(false), [setNotesOpen]);
+  const { annotations, loading: annotationsLoading, remove: removeAnnotation } = useBookAnnotations(bookId, annotationsVersion);
+  const [chapters, setChapters] = useState<ReaderChapter[]>([]);
+  const dark = useDarkMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +135,8 @@ export function PdfReader({
       pdfRef.current = pdf;
       setPageNumber((page) => Math.min(Math.max(1, page), pdf.numPages));
       setNumPages(pdf.numPages);
+      const found = await loadChapters(pdf);
+      if (!cancelled) setChapters(found);
     }
 
     load().catch((error) => {
@@ -184,6 +238,13 @@ export function PdfReader({
         textLayerEl.style.setProperty("--scale-round-x", "1px");
         textLayerEl.style.setProperty("--scale-round-y", "1px");
         const textContent = await pdfPage.getTextContent();
+        const words = countWords(textContent.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+        if (!pageWordsRef.current.has(page)) {
+          pageWordsRef.current.set(page, words);
+          const counts = [...pageWordsRef.current.values()].filter((count) => count > 0);
+          setWordsPerPage(counts.length ? Math.round(counts.reduce((sum, count) => sum + count, 0) / counts.length) : null);
+        }
+        if (page === previousPageRef.current) notePageWords(words);
         const textLayer = new pdfjsLib.TextLayer({
           textContentSource: textContent,
           container: textLayerEl,
@@ -206,8 +267,15 @@ export function PdfReader({
         if (pdfRef.current === pdf) setLoadState(readerErrorState(error));
       }
     },
-    [zoomLevel]
+    [zoomLevel, notePageWords]
   );
+
+  // A page turn is reading activity (for auto-pause).
+  useEffect(() => {
+    const previous = previousPageRef.current;
+    previousPageRef.current = pageNumber;
+    pageTurn(pageWordsRef.current.get(pageNumber) ?? null, previous !== null && pageNumber > previous);
+  }, [pageNumber, pageTurn]);
 
   useEffect(() => {
     if (numPages === 0) return;
@@ -331,13 +399,24 @@ export function PdfReader({
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='slider']")) return;
       if (event.key === "ArrowRight") goToPage(pageNumber + 1);
       if (event.key === "ArrowLeft") goToPage(pageNumber - 1);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pageNumber, goToPage]);
+
+  const wpm =
+    session.speedSample.words >= MIN_SAMPLE_WORDS
+      ? wordsPerMinute(session.speedSample.words, session.speedSample.seconds)
+      : averageWpm;
+  const place = chapterAt(chapters, pageNumber);
+  // Time left in this chapter when the PDF has an outline, else in the book.
+  const lastPage = place ? (place.next ? place.next.start - 1 : numPages) : numPages;
+  const minutesLeft = wpm && wordsPerPage && numPages ? (Math.max(0, lastPage - pageNumber) * wordsPerPage) / wpm : null;
+  const percent = numPages ? (pageNumber / numPages) * 100 : 0;
+  const paper = dark ? { background: "#1a201c", color: "#e8e4dc", textured: false } : { background: "#faf7f2", color: "#1c1b1b", textured: true };
 
   async function markFinished() {
     const response = await fetch(`/api/books/${bookId}/finish`, { method: "POST" });
@@ -349,61 +428,29 @@ export function PdfReader({
       <ReaderToolbar
         title={title}
         format="pdf"
-        elapsedSeconds={elapsedSeconds}
+        chapterLabel={place?.chapter.label ?? null}
+        progressLabel={numPages ? `${Math.round(percent)}% (p. ${pageNumber}/${numPages})` : null}
+        session={session}
+        pomodoro={pomodoro}
         isFinished={isFinished}
         onMarkFinished={markFinished}
         dailyGoalMinutes={dailyGoalMinutes}
         minutesBeforeSession={minutesBeforeSession}
+        trailing={
+          <NotesPanelToggle
+            open={notesOpen}
+            onToggle={() => setNotesOpen(!notesOpen)}
+            panelId={notesPanelId}
+            count={annotations.filter((annotation) => annotation.type !== "bookmark").length}
+          />
+        }
       >
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Previous page"
-          onClick={() => goToPage(pageNumber - 1)}
-          disabled={pageNumber <= 1}
-        >
-          <ChevronLeft />
-        </Button>
-        <span className="min-w-16 text-center text-xs font-semibold text-muted-foreground tabular-nums">
-          {pageNumber} / {numPages || "…"}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Next page"
-          onClick={() => goToPage(pageNumber + 1)}
-          disabled={numPages > 0 && pageNumber >= numPages}
-        >
-          <ChevronRight />
-        </Button>
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Zoom out"
-          onClick={() => changeZoom(-ZOOM_STEP)}
-          disabled={zoomLevel <= MIN_ZOOM}
-        >
-          <ZoomOut />
-        </Button>
-        <span className="min-w-12 text-center text-xs font-semibold text-muted-foreground tabular-nums">
-          {Math.round(zoomLevel * 100)}%
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Zoom in"
-          onClick={() => changeZoom(ZOOM_STEP)}
-          disabled={zoomLevel >= MAX_ZOOM}
-        >
-          <ZoomIn />
-        </Button>
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
         <Button
           variant={highlightMode ? "default" : "ghost"}
           size="icon-sm"
           aria-label={highlightMode ? "Exit highlight mode" : "Enter highlight mode"}
           aria-pressed={highlightMode}
+          title="Highlight mode"
           onClick={() => setHighlightMode((v) => !v)}
         >
           <Highlighter />
@@ -413,49 +460,75 @@ export function PdfReader({
           getCurrentLocation={() => String(pageNumber)}
           onSaved={() => setAnnotationsVersion((v) => v + 1)}
         />
-        <AddNoteButton
-          bookId={bookId}
-          getCurrentLocation={() => String(pageNumber)}
-          onSaved={() => setAnnotationsVersion((v) => v + 1)}
-        />
-        <AnnotationsPanel
-          bookId={bookId}
-          refreshKey={annotationsVersion}
-          onJumpTo={(location) => goToPage(Number(location) || 1)}
-        />
-      </ReaderToolbar>
-      <div
-        ref={containerRef}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-secondary/60 p-4"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        <ReaderLoadStatus state={loadState} onRetry={() => {
-          setLoadState(INITIAL_READER_LOAD);
-          setNumPages(0);
-          setLoadAttempt((attempt) => attempt + 1);
-        }} />
-        <div className="relative">
-          <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
-          <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
-          <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
-          <button
-            type="button"
-            aria-label="Previous page"
-            className="absolute inset-y-0 left-0 z-20 w-12 cursor-w-resize"
-            onClick={() => goToPage(pageNumber - 1)}
-          />
-          <button
-            type="button"
-            aria-label="Next page"
-            className="absolute inset-y-0 right-0 z-20 w-12 cursor-e-resize"
-            onClick={() => goToPage(pageNumber + 1)}
-          />
+        <div className="ml-1 flex items-center rounded-lg bg-secondary" role="group" aria-label="Zoom">
+          <Button variant="ghost" size="icon-sm" aria-label="Zoom out" onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoomLevel <= MIN_ZOOM}>
+            <ZoomOut />
+          </Button>
+          <span className="min-w-10 text-center text-[11px] font-semibold text-muted-foreground tabular-nums">{Math.round(zoomLevel * 100)}%</span>
+          <Button variant="ghost" size="icon-sm" aria-label="Zoom in" onClick={() => changeZoom(ZOOM_STEP)} disabled={zoomLevel >= MAX_ZOOM}>
+            <ZoomIn />
+          </Button>
         </div>
+      </ReaderToolbar>
+
+      <div className="flex min-h-0 flex-1 gap-6 px-3 py-3 sm:px-6 sm:py-4">
+        <ReaderPage
+          eyebrow={place ? place.chapter.label : null}
+          caption={author}
+          pageLabel={numPages ? String(pageNumber) : null}
+          onPrev={() => goToPage(pageNumber - 1)}
+          onNext={() => goToPage(pageNumber + 1)}
+          canPrev={pageNumber > 1}
+          canNext={numPages === 0 || pageNumber < numPages}
+          className="min-w-0 flex-1"
+          style={paperStyle(paper.background, paper.color, paper.textured)}
+        >
+          <div
+            ref={containerRef}
+            className="relative flex h-full items-center justify-center overflow-auto p-4"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            <ReaderLoadStatus state={loadState} onRetry={() => {
+              setLoadState(INITIAL_READER_LOAD);
+              setNumPages(0);
+              setLoadAttempt((attempt) => attempt + 1);
+            }} />
+            <div className="relative">
+              <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
+              <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
+              <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
+              {/* Mouse-only page-turn zones; keyboard users have the footer buttons and arrow keys. */}
+              <button type="button" tabIndex={-1} aria-hidden="true" className="absolute inset-y-0 left-0 z-20 w-12 cursor-w-resize" onClick={() => goToPage(pageNumber - 1)} />
+              <button type="button" tabIndex={-1} aria-hidden="true" className="absolute inset-y-0 right-0 z-20 w-12 cursor-e-resize" onClick={() => goToPage(pageNumber + 1)} />
+            </div>
+          </div>
+        </ReaderPage>
+        <ReaderNotesPanel
+          id={notesPanelId}
+          bookId={bookId}
+          bookTitle={title}
+          open={notesOpen}
+          onClose={closeNotes}
+          annotations={annotations}
+          loading={annotationsLoading}
+          onDelete={removeAnnotation}
+          getCurrentLocation={() => String(pageNumber)}
+          describeLocation={describePage}
+          onJumpTo={(location) => goToPage(Number(location) || 1)}
+          onSaved={() => setAnnotationsVersion((v) => v + 1)}
+          onActivity={markActivity}
+        />
       </div>
-      <ReaderProgress
-        percent={numPages ? (pageNumber / numPages) * 100 : 0}
-        label={numPages ? `Page ${pageNumber} of ${numPages} · ${Math.round((pageNumber / numPages) * 100)}%` : "Opening…"}
+
+      <ReaderScrubber
+        percent={percent}
+        markers={chapters.flatMap((chapter) => (chapter.position !== null ? [{ label: chapter.label, percent: chapter.position * 100 }] : []))}
+        onSeek={numPages ? (fraction) => goToPage(Math.min(numPages, Math.max(1, Math.round(fraction * numPages)))) : undefined}
+        timeLeft={minutesLeft !== null ? `~${formatTimeLeft(minutesLeft)} left in ${place ? `chapter ${place.number}` : "book"}` : null}
+        speed={wpm ? `${wpm} wpm` : null}
+        chapter={place ? `${place.number} of ${place.count}` : null}
+        position={numPages ? `Page ${pageNumber} of ${numPages}` : "Opening…"}
       />
     </div>
   );

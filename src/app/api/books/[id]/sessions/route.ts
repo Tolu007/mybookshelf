@@ -17,7 +17,12 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => null);
-  const { startedAt, endedAt, durationSeconds, localDate } = body ?? {};
+  const { startedAt, endedAt, durationSeconds, localDate, wordsRead, wordSeconds } = body ?? {};
+  // Optional reading-speed sample; anything malformed is simply dropped.
+  const speed =
+    typeof wordsRead === "number" && typeof wordSeconds === "number" && wordsRead > 0 && wordSeconds > 0
+      ? { wordsRead: Math.round(wordsRead), wordSeconds: Math.min(Math.round(wordSeconds), durationSeconds) }
+      : null;
 
   if (
     typeof startedAt !== "string" ||
@@ -35,6 +40,7 @@ export async function POST(
       endedAt,
       durationSeconds,
       localDate,
+      speed,
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

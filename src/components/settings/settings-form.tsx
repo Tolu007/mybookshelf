@@ -2,44 +2,31 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
+import { Bell, Check, Coffee, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { SettingsSection as Section } from "@/components/settings/settings-section";
 import {
+  AUTO_PAUSE_OPTIONS,
+  BREAK_OPTIONS,
+  CHIME_OPTIONS,
+  FOCUS_OPTIONS,
   DEFAULT_PREFERENCES,
   FONT_SIZE_RANGE,
   LINE_HEIGHTS,
   MEASURES,
   PAPERS,
   READER_FONTS,
+  READER_FONT_VARS,
   type Paper,
   type Preferences,
   type ReaderFont,
 } from "@/lib/preferences";
 import { applyThemeChoice, readThemeChoice, type ThemeChoice } from "@/lib/theme";
+import { playChime } from "@/lib/chime";
 import { cn } from "@/lib/utils";
 
-// CSS variables from next/font: Newsreader and Jakarta are app-wide; the
-// settings page adds Garamond and Literata (lib/reader-fonts.ts).
-const FONT_VARS: Record<ReaderFont, string> = {
-  newsreader: "var(--font-newsreader)",
-  garamond: "var(--font-garamond)",
-  literata: "var(--font-literata)",
-  jakarta: "var(--font-jakarta)",
-};
-
-function Section({ id, index, title, description, children }: { id: string; index: string; title: string; description: string; children: ReactNode }) {
-  return (
-    <section aria-labelledby={id} className="surface space-y-5 p-5 sm:p-6">
-      <div>
-        <p className="eyebrow">Section {index}</p>
-        <h2 id={id} className="mt-1 font-heading text-xl leading-7 font-semibold">{title}</h2>
-        <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
+const FONT_VARS = READER_FONT_VARS;
 
 function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
@@ -90,9 +77,11 @@ function Stepper({ label, value, unit, step, min, max, onChange }: {
   );
 }
 
-export function SettingsForm({ initial, profile }: {
+export function SettingsForm({ initial, profile, extra = null }: {
   initial: Preferences;
   profile: ReactNode;
+  // Server-rendered sections shown after the form's own (e.g. data export).
+  extra?: ReactNode;
 }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState(initial);
@@ -110,6 +99,7 @@ export function SettingsForm({ initial, profile }: {
   const reader = prefs.reader;
   const setReader = (patch: Partial<Preferences["reader"]>) => setPrefs((value) => ({ ...value, reader: { ...value.reader, ...patch } }));
   const setGoals = (patch: Partial<Preferences["goals"]>) => setPrefs((value) => ({ ...value, goals: { ...value.goals, ...patch } }));
+  const setTimer = (patch: Partial<Preferences["timer"]>) => setPrefs((value) => ({ ...value, timer: { ...value.timer, ...patch } }));
 
   async function save() {
     setSaving(true);
@@ -249,7 +239,56 @@ export function SettingsForm({ initial, profile }: {
             </p>
           </Section>
 
-          <Section id="goals" index="03" title="Reading goals" description="Targets shown in the reader and on your statistics. Set to Off to hide them.">
+          <Section id="timer" index="03" title="Timer & focus" description="How the session clock behaves while you read.">
+            <div className="rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <p className="flex items-center gap-2 text-sm font-semibold"><Hourglass className="size-4 text-sage" aria-hidden="true" /> Automatic pause</p>
+              <p className="mt-1 mb-3 text-xs text-muted-foreground">Pause the clock when you haven&apos;t turned a page for a while. The next page turn resumes it.</p>
+              <Segmented
+                label="Automatic pause"
+                value={prefs.timer.autoPauseMinutes ?? 0}
+                options={[{ value: 0, label: "Off" }, ...AUTO_PAUSE_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
+                onChange={(minutes) => setTimer({ autoPauseMinutes: minutes || null })}
+              />
+            </div>
+            <div className="rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold"><Bell className="size-4 text-amber" aria-hidden="true" /> Interval chime</p>
+                  <p className="mt-1 mb-3 text-xs text-muted-foreground">A soft bell each time you&apos;ve read for this long. Paused time doesn&apos;t count.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => playChime()}>Preview</Button>
+              </div>
+              <Segmented
+                label="Interval chime"
+                value={prefs.timer.chimeMinutes ?? 0}
+                options={[{ value: 0, label: "Off" }, ...CHIME_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
+                onChange={(minutes) => setTimer({ chimeMinutes: minutes || null })}
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <label className="flex items-start justify-between gap-4">
+                <span>
+                  <span className="flex items-center gap-2 text-sm font-semibold"><Coffee className="size-4 text-sage" aria-hidden="true" /> Pomodoro focus cycles</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Read in focused blocks with short breaks. A chime marks each change; breaks don&apos;t count as reading time.</span>
+                </span>
+                <Switch checked={prefs.timer.pomodoro} onCheckedChange={(pomodoro) => setTimer({ pomodoro })} aria-label="Pomodoro focus cycles" />
+              </label>
+              {prefs.timer.pomodoro && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="meta mb-2">Focus</p>
+                    <Segmented label="Focus length" value={prefs.timer.focusMinutes} options={FOCUS_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes}m` }))} onChange={(focusMinutes) => setTimer({ focusMinutes })} />
+                  </div>
+                  <div>
+                    <p className="meta mb-2">Break</p>
+                    <Segmented label="Break length" value={prefs.timer.breakMinutes} options={BREAK_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes}m` }))} onChange={(breakMinutes) => setTimer({ breakMinutes })} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </Section>
+
+          <Section id="goals" index="04" title="Reading goals" description="Targets shown in the reader and on your statistics. Set to Off to hide them.">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
                 <p className="flex items-center gap-2 text-sm font-semibold"><Target className="size-4 text-amber" aria-hidden="true" /> Daily reading target</p>
@@ -263,6 +302,7 @@ export function SettingsForm({ initial, profile }: {
               </div>
             </div>
           </Section>
+          {extra}
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-20 xl:self-start">

@@ -1,4 +1,4 @@
-import { eachDayOfInterval, endOfWeek, format, startOfWeek } from "date-fns";
+import { differenceInCalendarDays, eachDayOfInterval, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 
 export type SessionRow = { local_date: string; duration_seconds: number };
 
@@ -127,4 +127,33 @@ export function countActiveDays(dailyMinutes: Map<string, number>, fromDate: str
     if (minutes > 0 && dateKey >= fromDate && dateKey <= toDate) count += 1;
   }
   return count;
+}
+
+// The longest run of consecutive reading days in the map.
+export function longestStreakIn(dailyMinutes: Map<string, number>) {
+  const days = [...dailyMinutes].filter(([, minutes]) => minutes > 0).map(([day]) => day).sort();
+  let best = 0;
+  let run = 0;
+  let previous: string | null = null;
+  for (const day of days) {
+    run = previous && differenceInCalendarDays(parseISO(day), parseISO(previous)) === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+    previous = day;
+  }
+  return best;
+}
+
+// Minutes per calendar year, oldest first, with quiet years filled in as 0.
+export function buildYearlyTotals(dailyMinutes: Map<string, number>, untilYear: number) {
+  const totals = new Map<number, number>();
+  for (const [dateKey, minutes] of dailyMinutes) {
+    const year = Number(dateKey.slice(0, 4));
+    totals.set(year, (totals.get(year) ?? 0) + minutes);
+  }
+  if (totals.size === 0) return [{ year: untilYear, minutes: 0 }];
+  const first = Math.min(...totals.keys());
+  return Array.from({ length: untilYear - first + 1 }, (_, index) => ({
+    year: first + index,
+    minutes: Math.round(totals.get(first + index) ?? 0),
+  }));
 }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { LibraryBig } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { JournalList, type JournalEntry } from "@/components/journal/journal-list";
+import { JournalList } from "@/components/journal/journal-list";
+import { inTab, matchesQuery, paginate, parseTab, tabCounts, type JournalEntry } from "@/lib/journal";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 import { JournalComposer } from "@/components/journal/journal-composer";
 import { PageHeader } from "@/components/page-header";
 
@@ -17,7 +19,14 @@ type EntryRow = {
 
 const INDEXED_VOLUMES = 6;
 
-export default async function JournalPage() {
+export default async function JournalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; tab?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+  const query = params.q?.trim() ?? "";
+  const tab = parseTab(params.tab);
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,11 +35,15 @@ export default async function JournalPage() {
   if (!user) return null;
 
   const [{ data: rows }, { data: allBooks }, { data: progress }] = await Promise.all([
-    supabase
-      .from("annotations")
-      .select("id, type, location, note, excerpt, created_at, book:books(id, title, format)")
-      .in("type", ["note", "highlight"])
-      .order("created_at", { ascending: false }),
+    fetchAll<EntryRow>((from, to) =>
+      supabase
+        .from("annotations")
+        .select("id, type, location, note, excerpt, created_at, book:books(id, title, format)")
+        .in("type", ["note", "highlight"])
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to) as unknown as PromiseLike<{ data: EntryRow[] | null; error: unknown }>
+    ),
     supabase.from("books").select("id, title, author").order("title"),
     supabase.from("reading_progress").select("book_id, location"),
   ]);
@@ -43,7 +56,7 @@ export default async function JournalPage() {
   }));
 
   // A note's book is optional: entries written outside a book have none.
-  const entries: JournalEntry[] = ((rows ?? []) as unknown as EntryRow[]).map((row) => ({
+  const entries: JournalEntry[] = rows.map((row) => ({
     id: row.id,
     kind: row.type,
     note: row.note,
@@ -58,6 +71,11 @@ export default async function JournalPage() {
   for (const entry of entries) {
     if (entry.book) entryCounts.set(entry.book.id, (entryCounts.get(entry.book.id) ?? 0) + 1);
   }
+  // Search applies before tab counts, so each tab shows how many match.
+  const matching = entries.filter((entry) => matchesQuery(entry, query));
+  const counts = tabCounts(matching);
+  const { items: shown, pagination } = paginate(matching.filter((entry) => inTab(entry, tab)), params.page);
+
   const indexed = (allBooks ?? [])
     .filter((book) => entryCounts.has(book.id))
     .sort((a, b) => (entryCounts.get(b.id) ?? 0) - (entryCounts.get(a.id) ?? 0))
@@ -103,7 +121,7 @@ export default async function JournalPage() {
           </section>
         </aside>
 
-        <JournalList initialEntries={entries} />
+        <JournalList entries={shown} counts={counts} tab={tab} query={query} pagination={pagination} />
       </div>
     </div>
   );

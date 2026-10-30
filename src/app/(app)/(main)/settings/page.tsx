@@ -6,6 +6,7 @@ import { garamond, literata } from "@/lib/reader-fonts";
 import { PageHeader } from "@/components/page-header";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { SignOutButton } from "@/components/settings/sign-out-button";
+import { DataSection } from "@/components/settings/data-section";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -63,7 +64,7 @@ export default async function SettingsPage() {
         title="Settings & reading environment"
         description="Tune how books are typeset, how Shelf looks, and the goals that keep you reading."
       />
-      <SettingsForm initial={preferences} profile={profile} />
+      <SettingsForm initial={preferences} profile={profile} extra={<DataSection />} />
     </div>
   );
 }

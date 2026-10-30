@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const MIN_SESSION_SECONDS = 30;
 
+// Postgres "undefined column", or PostgREST not knowing the column yet.
+function isMissingColumn(error: { code?: string }) {
+  return error.code === "42703" || error.code === "PGRST204";
+}
+
 function shiftDate(dateStr: string, days: number) {
   const date = new Date(`${dateStr}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -17,18 +22,28 @@ export async function recordReadingSession(
     endedAt: string;
     durationSeconds: number;
     localDate: string;
+    speed?: { wordsRead: number; wordSeconds: number } | null;
   }
 ) {
   if (params.durationSeconds < MIN_SESSION_SECONDS) return;
 
-  const { error: sessionError } = await supabase.from("reading_sessions").insert({
+  const session = {
     user_id: userId,
     book_id: params.bookId,
     started_at: params.startedAt,
     ended_at: params.endedAt,
     duration_seconds: Math.round(params.durationSeconds),
     local_date: params.localDate,
-  });
+  };
+  const row: Record<string, unknown> = params.speed
+    ? { ...session, words_read: params.speed.wordsRead, word_seconds: params.speed.wordSeconds }
+    : session;
+  let { error: sessionError } = await supabase.from("reading_sessions").insert(row);
+  // The speed columns arrive with a schema update. Until it's been run,
+  // still record the session itself rather than losing it.
+  if (sessionError && params.speed && isMissingColumn(sessionError)) {
+    ({ error: sessionError } = await supabase.from("reading_sessions").insert(session));
+  }
   if (sessionError) throw sessionError;
 
   const { data: stats, error: statsError } = await supabase

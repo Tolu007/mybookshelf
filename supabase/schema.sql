@@ -207,3 +207,11 @@ alter table public.user_preferences enable row level security;
 drop policy if exists "own preferences" on public.user_preferences;
 create policy "own preferences" on public.user_preferences
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Reading speed, measured in the reader: words on the pages you turned
+-- past, and the reading time spent on those pages. Null for sessions
+-- recorded before this existed.
+alter table public.reading_sessions add column if not exists words_read integer
+  check (words_read is null or words_read >= 0);
+alter table public.reading_sessions add column if not exists word_seconds integer
+  check (word_seconds is null or word_seconds >= 0);

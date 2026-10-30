@@ -8,9 +8,7 @@ Suggested order: cheapest and most visible first.
 
 ## Books
 
-- [ ] **Star ratings.** A 1–5 rating on each book (half stars in the design), shown on book cards, Currently Reading cards, and the finished-books table on Stats. Needs `books.rating`.
 - [ ] **Page counts.** Total pages per book ("1,072 p." on cards, "Page 342 / 502" on Currently Reading). PDFs can report it on upload. EPUBs need an estimate or the reader's location count. Needs `books.page_count`.
-- [ ] **"Highest rated" sort** on the library (needs ratings).
 - [x] **Sort options.** Recently added, recently read, reading progress, title, author.
 - [ ] **Sub-tags per category.** Small tags beside each shelf heading ("Stoicism", "Epistemology"). Needs a tags table or a `books.tags` array.
 
@@ -21,47 +19,49 @@ Suggested order: cheapest and most visible first.
 - [ ] **Book excerpts on entries.** Attach the highlighted passage to a journal entry (shown as a "Book excerpt" quote block).
 - [ ] **Formatting toolbar.** Bold, italic, quote, list and link (Markdown) in the writing area.
 - [x] **Filter tabs.** All / In-book notes / Standalone / Highlights, with counts.
+- [x] **Search.** Across notes, highlighted passages and book titles, with matches marked; works with the tabs.
 - [x] **Indexed volumes sidebar.** Books ranked by number of journal entries.
 - [ ] **Journal cadence chart.** Entries per day this month.
 - [ ] **Export journal.** Download all entries as Markdown.
-- [ ] **Pagination.** "Previous / Next" once the journal gets long.
+- [x] **Pagination.** 20 entries a page, keeping the search and tab.
 - [ ] **Images on entries.** Optional photo per entry (lowest priority).
 
 ## Reader
 
-- [ ] **Focus timer controls.** Visible session timer with pause/stop in the reader bar (sessions are already timed in the background).
+- [x] **Focus timer controls.** Pause, resume, stop-and-save and start a new session from the reader bar.
 - [x] **Daily reading goal.** Set in Settings; shown in the reader bar and on Stats.
 - [ ] **Highlight colours.** 4 colours (sage, amber, crimson, slate) in the selection popup, optionally with meanings set in Settings.
 - [ ] **Copy / Define** in the selection popup.
-- [ ] **Session journal side panel.** Write notes and see this book's notes and highlights in a side panel instead of a dialog.
+- [x] **Session journal side panel.** Collapsible notes panel beside the page (slide-over on phones): write notes pinned to the current page, see and jump to this book's notes, highlights and bookmarks.
 - [ ] **Chapter progress.** Chapter markers on the bottom bar, "Chapter 4 of 12", and "~12 min left in chapter". (The bar itself and "page x of y in chapter" shipped.)
-- [ ] **Reading speed.** Words or pages per minute, shown in the reader and on Stats.
+- [x] **Reading speed.** Words per minute measured from page turns, with time left in the chapter (EPUB) or book (PDF).
 - [ ] **Drop-cap chapter openings.**
 - [x] **Reader typography.** Typeface, size, line spacing, column width, page colour, justified text (EPUB).
 
 ## Stats
 
 - [x] **Yearly book goal.** "24 / 30 goal" tile with ahead/behind pace.
-- [ ] **Reading speed tile.** Pages per hour (needs page counts).
+- [x] **Reading speed on Stats.** Average words per minute for the year, in the Time invested tile.
 - [ ] **Best reading window.** The time of day you read most, from session start times.
 - [ ] **Genre donut.** Books by category.
-- [ ] **Finished-books table.** Completion date, time invested, sessions, pace, rating.
-- [ ] **Year switcher.** 2024 / 2023 / All-time on the stats page.
+- [x] **Finished-books table.** Shelf, completion date, time invested and sessions, for the selected year or all time.
+- [x] **Year switcher.** Every year since you started, plus All time (year-by-year chart).
 - [ ] **Export stats.** Download as CSV or JSON.
 
 ## Settings (beyond the first version)
 
-- [ ] **Automatic session pause** after N minutes without a page turn.
-- [ ] **Interval chimes** (sound at 15/30/45 minutes).
-- [ ] **Pomodoro focus cycles.**
-- [ ] **Full library export.** Notes, metadata and reading logs as Markdown, JSON or PDF.
-- [ ] **Storage usage.** Drive space used by Shelf.
+- [x] **Automatic session pause** after 3, 5 or 10 minutes without a page turn (Settings → Timer & focus).
+- [x] **Interval chimes** every 15, 30, 45 or 60 minutes of reading, with a preview in Settings.
+- [x] **Pomodoro focus cycles.** Focus 15/25/45/50 min, break 5/10/15 min; breaks pause the session.
+- [x] **Full library export.** Markdown (journal + per-book highlights and notes) or full JSON, from Settings → Your data.
+- [x] **Storage usage.** Shelf's share of your Google Drive against its overall usage and limit (Settings → Your data).
 - [ ] **Metadata enrichment.** Look up book details (OpenLibrary) on upload.
 
 ## Not planned
 
 These appear in the Stitch screens but don't fit Shelf as built. Revisit only if wanted:
 
+- Star ratings and a "highest rated" sort (built, then removed: not needed for a personal library).
 - Audio books, MOBI files.
 - Readwise / Obsidian / local-folder sync.
 - LaTeX math in notes.

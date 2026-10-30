@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { loadPreferences } from "@/lib/preferences-server";
+import { loadAverageWpm } from "@/lib/reading-speed-server";
 import { PdfReader } from "@/components/readers/pdf-reader";
 import { EpubReader } from "@/components/readers/epub-reader";
+import { garamond, literata } from "@/lib/reader-fonts";
 
 export default async function ReadPage({
   params,
@@ -23,33 +25,38 @@ export default async function ReadPage({
 
   const { data: book } = await supabase
     .from("books")
-    .select("id, title, format, finished_at")
+    .select("id, title, author, format, finished_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
   if (!book) notFound();
 
-  const [{ data: progress }, preferences, { data: todaySessions }] = await Promise.all([
+  const [{ data: progress }, preferences, { data: todaySessions }, averageWpm] = await Promise.all([
     supabase.from("reading_progress").select("location").eq("book_id", id).maybeSingle(),
     loadPreferences(supabase, user.id),
     supabase.from("reading_sessions").select("duration_seconds").eq("local_date", format(new Date(), "yyyy-MM-dd")),
+    loadAverageWpm(supabase),
   ]);
 
   const sharedProps = {
     bookId: book.id,
     title: book.title,
+    author: book.author as string | null,
     // A note's own location (from the journal) takes priority over wherever
     // you last left off reading — you're jumping there on purpose.
     initialLocation: jumpToLocation ?? progress?.location ?? null,
     isFinished: Boolean(book.finished_at),
     dailyGoalMinutes: preferences.goals.dailyMinutes,
+    timer: preferences.timer,
+    averageWpm,
     minutesBeforeSession: (todaySessions ?? []).reduce((sum, row) => sum + row.duration_seconds, 0) / 60,
   };
 
-  return book.format === "pdf" ? (
-    <PdfReader {...sharedProps} />
-  ) : (
-    <EpubReader {...sharedProps} typography={preferences.reader} />
+  // The font variables let Typecraft preview every reading typeface.
+  return (
+    <div className={`flex min-h-0 flex-1 flex-col ${garamond.variable} ${literata.variable}`}>
+      {book.format === "pdf" ? <PdfReader {...sharedProps} /> : <EpubReader {...sharedProps} preferences={preferences} />}
+    </div>
   );
 }
