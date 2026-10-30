@@ -37,7 +37,7 @@ export default async function LibraryPage({
   const since = format(subDays(new Date(), 29), "yyyy-MM-dd");
   const [{ data: categories }, { data: bookRows }, { data: progressRows }, { data: recentSessions }] = await Promise.all([
     supabase.from("categories").select("id, name").order("name"),
-    supabase.from("books").select("id, title, author, cover_url, format, category_id, want_to_read, is_favorite, finished_at, added_at"),
+    supabase.from("books").select("id, title, author, cover_url, format, category_id, want_to_read, is_favorite, finished_at, added_at, rating"),
     supabase.from("reading_progress").select("book_id, percent, location, updated_at"),
     supabase.from("reading_sessions").select("duration_seconds").gte("local_date", since),
   ]);
@@ -47,6 +47,8 @@ export default async function LibraryPage({
     const progress = progressByBook.get(book.id);
     return {
       ...book,
+      // numeric columns arrive as strings from PostgREST.
+      rating: book.rating === null ? null : Number(book.rating),
       percent: progress ? Number(progress.percent) : null,
       last_read_at: progress?.updated_at ?? null,
     };
@@ -138,6 +140,7 @@ export default async function LibraryPage({
                 lastReadLabel={book.last_read_at ? formatDistanceToNowStrict(new Date(book.last_read_at), { addSuffix: true }) : null}
                 notes={countsFor(book.id, "note")}
                 highlights={countsFor(book.id, "highlight")}
+                rating={book.rating}
                 primary={index === 0}
               />
             ))}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeft, Check, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BookRatingControl } from "@/components/book-rating-control";
 
 function clock(totalSeconds: number) {
   const hours = Math.floor(totalSeconds / 3600);
@@ -13,6 +14,8 @@ function clock(totalSeconds: number) {
 }
 
 export function ReaderToolbar({
+  bookId,
+  rating = null,
   title,
   format,
   elapsedSeconds,
@@ -22,6 +25,9 @@ export function ReaderToolbar({
   minutesBeforeSession = 0,
   children,
 }: {
+  bookId?: string;
+  // Offered once the book is finished.
+  rating?: number | null;
   title: string;
   format?: string;
   elapsedSeconds: number;
@@ -69,6 +75,8 @@ export function ReaderToolbar({
               <span className="text-[11px] font-semibold tabular-nums">{todayMinutes}/{dailyGoalMinutes}m</span>
             </div>
           )}
+
+          {isFinished && bookId && <BookRatingControl bookId={bookId} initialRating={rating} />}
 
           <Button variant={isFinished ? "secondary" : "default"} size="sm" onClick={onMarkFinished} disabled={isFinished}>
             <Check /> {isFinished ? "Finished" : "Finish book"}

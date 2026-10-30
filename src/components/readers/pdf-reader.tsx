@@ -28,6 +28,7 @@ export function PdfReader({
   title,
   initialLocation,
   isFinished: initialIsFinished,
+  rating,
   dailyGoalMinutes,
   minutesBeforeSession,
 }: {
@@ -35,6 +36,7 @@ export function PdfReader({
   title: string;
   initialLocation: string | null;
   isFinished: boolean;
+  rating: number | null;
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
 }) {
@@ -347,6 +349,8 @@ export function PdfReader({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ReaderToolbar
+        bookId={bookId}
+        rating={rating}
         title={title}
         format="pdf"
         elapsedSeconds={elapsedSeconds}

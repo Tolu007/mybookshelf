@@ -4,6 +4,7 @@ import { BookCover } from "@/components/book-cover";
 import { FormatBadge } from "@/components/book-card";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { StarRating } from "@/components/star-rating";
 
 export type ReadingCardBook = {
   id: string;
@@ -32,6 +33,7 @@ export function ReadingCard({
   notes,
   highlights,
   primary = false,
+  rating = null,
 }: {
   book: ReadingCardBook;
   percent: number;
@@ -41,6 +43,7 @@ export function ReadingCard({
   notes: number;
   highlights: number;
   primary?: boolean;
+  rating?: number | null;
 }) {
   const href = `/read/${book.id}`;
   // PDFs store a page number; EPUBs store a CFI, which means nothing to a reader.
@@ -63,6 +66,7 @@ export function ReadingCard({
               <Link href={href} className="hover:text-sage">{book.title}</Link>
             </h3>
             <p className="truncate text-[13px] text-muted-foreground">{book.author ?? "Unknown author"}</p>
+            {rating ? <StarRating rating={rating} showValue className="mt-1.5" /> : null}
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2">

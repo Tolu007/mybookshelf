@@ -8,9 +8,9 @@ Suggested order: cheapest and most visible first.
 
 ## Books
 
-- [ ] **Star ratings.** A 1–5 rating on each book (half stars in the design), shown on book cards, Currently Reading cards, and the finished-books table on Stats. Needs `books.rating`.
+- [x] **Star ratings.** A 1–5 rating on each book (half stars in the design), shown on book cards, Currently Reading cards, and the finished-books table on Stats. Needs `books.rating`.
 - [ ] **Page counts.** Total pages per book ("1,072 p." on cards, "Page 342 / 502" on Currently Reading). PDFs can report it on upload. EPUBs need an estimate or the reader's location count. Needs `books.page_count`.
-- [ ] **"Highest rated" sort** on the library (needs ratings).
+- [x] **"Highest rated" sort** on the library.
 - [x] **Sort options.** Recently added, recently read, reading progress, title, author.
 - [ ] **Sub-tags per category.** Small tags beside each shelf heading ("Stoicism", "Epistemology"). Needs a tags table or a `books.tags` array.
 

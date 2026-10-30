@@ -45,6 +45,8 @@ const { ReaderLoadStatus } = require("../src/components/readers/reader-load-stat
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
+const { StarRating, RatingInput } = require("../src/components/star-rating.tsx");
+const rating = require("../src/lib/rating.ts");
 const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
 const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
 const preferences = require("../src/lib/preferences.ts");
@@ -60,7 +62,7 @@ function render(element, pathname = "/", query = "") {
 const h = React.createElement;
 const book = { id: "book-1", title: "A thoughtful book", author: "A Reader", cover_url: null, format: "epub", want_to_read: false, is_favorite: false, category_id: null };
 const note = { id: "note-1", kind: "note", note: "An idea worth keeping.", excerpt: null, location: "epubcfi(/6/2[chapter]!/4/1:0)", createdAt: "2026-10-11T12:00:00Z", book: { id: book.id, title: book.title, format: "epub" } };
-const shelfBook = (overrides) => ({ ...book, finished_at: null, added_at: "2026-01-01T00:00:00Z", percent: null, last_read_at: null, ...overrides });
+const shelfBook = (overrides) => ({ ...book, finished_at: null, added_at: "2026-01-01T00:00:00Z", percent: null, last_read_at: null, rating: null, ...overrides });
 
 test("book controls stay outside reading links and all links target the book", () => {
   const html = render(h(BookCard, { book }));
@@ -234,6 +236,38 @@ test("stats helpers find the peak weekday and count active days in range", () =>
   assert.deepEqual(statsAggregate.peakWeekday(days), { label: "Sundays", averageMinutes: 60 });
   assert.equal(statsAggregate.peakWeekday(new Map()), null);
   assert.equal(statsAggregate.countActiveDays(days, "2026-03-02", "2026-04-30"), 2);
+});
+
+test("ratings accept half stars from 0.5 to 5, null to clear, and nothing else", () => {
+  for (const value of [0.5, 3, 4.5, 5]) assert.equal(rating.parseRating(value), value);
+  assert.equal(rating.parseRating(null), null);
+  for (const value of [0, 5.5, 3.2, "4", NaN, undefined]) assert.equal(rating.parseRating(value), undefined);
+  assert.equal(rating.formatRating(4), "4.0");
+  assert.equal(rating.formatRating(3.5), "3.5");
+});
+
+test("stars show whole and half ratings accessibly, and the input is a single labelled slider", () => {
+  const stars = render(h(StarRating, { rating: 3.5, showValue: true }));
+  assert.match(stars, /aria-label="Rated 3.5 out of 5"/);
+  assert.equal((stars.match(/lucide-star-half/g) ?? []).length, 1);
+  assert.equal((stars.match(/fill-amber text-amber/g) ?? []).length, 4);
+  const input = render(h(RatingInput, { value: null, onChange() {} }));
+  assert.match(input, /role="slider"/);
+  assert.match(input, /aria-valuetext="Not rated"/);
+  assert.match(render(h(RatingInput, { value: 4, onChange() {} })), /aria-valuetext="4.0 out of 5 stars"/);
+});
+
+test("rated books show their rating on cards, sort first, and finished books can be rated in the reader", () => {
+  const card = render(h(BookCard, { book: { ...book, rating: 4.5 } }));
+  assert.match(card, /aria-label="Rated 4.5 out of 5"/);
+  assert.doesNotMatch(render(h(BookCard, { book })), /Rated/);
+  const books = [shelfBook({ id: "a", rating: null }), shelfBook({ id: "b", rating: 3 }), shelfBook({ id: "c", rating: 5 })];
+  assert.deepEqual(library.sortBooks(books, "rating").map((b) => b.id), ["c", "b", "a"]);
+  const finished = render(h(ReaderToolbar, { bookId: book.id, rating: null, title: book.title, elapsedSeconds: 0, isFinished: true, onMarkFinished() {} }));
+  assert.match(finished, /aria-label="Rate this book"/);
+  assert.match(finished, /Rate it/);
+  const reading = render(h(ReaderToolbar, { bookId: book.id, rating: null, title: book.title, elapsedSeconds: 0, isFinished: false, onMarkFinished() {} }));
+  assert.doesNotMatch(reading, /Rate this book/);
 });
 
 test("zero reading data does not draw positive bars", () => {

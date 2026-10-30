@@ -14,6 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { blobToDataUrl } from "@/lib/extract-cover";
+import { RatingInput } from "@/components/star-rating";
+import { formatRating } from "@/lib/rating";
 
 type EditableBook = {
   id: string;
@@ -21,6 +23,7 @@ type EditableBook = {
   author: string | null;
   cover_url: string | null;
   category_id: string | null;
+  rating?: number | null;
 };
 
 export function EditBookDialog({
@@ -41,6 +44,7 @@ export function EditBookDialog({
     categories.find((c) => c.id === book.category_id)?.name ?? ""
   );
   const [coverPreview, setCoverPreview] = useState<string | null>(book.cover_url);
+  const [rating, setRating] = useState<number | null>(book.rating ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +63,9 @@ export function EditBookDialog({
       const payload: Record<string, unknown> = { title, author, category };
       if (coverPreview !== book.cover_url) {
         payload.cover_url = coverPreview ?? "";
+      }
+      if (rating !== (book.rating ?? null)) {
+        payload.rating = rating;
       }
 
       const response = await fetch(`/api/books/${book.id}`, {
@@ -87,7 +94,7 @@ export function EditBookDialog({
         <form onSubmit={onSubmit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>Edit book</DialogTitle>
-            <DialogDescription>Update the cover, title, author, or category.</DialogDescription>
+            <DialogDescription>Update the cover, title, author, category, or your rating.</DialogDescription>
           </DialogHeader>
 
           <div className="flex gap-4">
@@ -148,6 +155,19 @@ export function EditBookDialog({
                 <option key={c.id} value={c.name} />
               ))}
             </datalist>
+          </div>
+
+          <div className="space-y-2">
+            <span className="block text-sm font-medium">Your rating</span>
+            <div className="flex items-center gap-3">
+              <RatingInput value={rating} onChange={setRating} />
+              <span className="meta">{rating ? `${formatRating(rating)} / 5` : "Not rated"}</span>
+              {rating !== null && (
+                <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setRating(null)}>
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

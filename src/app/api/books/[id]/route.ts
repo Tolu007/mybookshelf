@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { deleteBookFile } from "@/lib/google/drive";
 import { resolveCategoryId } from "@/lib/categories";
+import { parseRating } from "@/lib/rating";
 
 export async function PATCH(
   request: Request,
@@ -42,6 +43,14 @@ export async function PATCH(
     update.category_id = body.category.trim()
       ? await resolveCategoryId(supabase, user.id, body.category.trim())
       : null;
+  }
+
+  if ("rating" in body) {
+    const rating = parseRating(body.rating);
+    if (rating === undefined) {
+      return NextResponse.json({ error: "Rating must be between 0.5 and 5, in half stars." }, { status: 400 });
+    }
+    update.rating = rating;
   }
 
   if (typeof body.cover_url === "string") {
