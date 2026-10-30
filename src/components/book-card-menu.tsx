@@ -26,7 +26,6 @@ type EditableBook = {
   author: string | null;
   cover_url: string | null;
   category_id: string | null;
-  rating?: number | null;
 };
 
 export function BookCardMenu({

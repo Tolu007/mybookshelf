@@ -23,7 +23,7 @@ export default async function ReadPage({
 
   const { data: book } = await supabase
     .from("books")
-    .select("id, title, format, finished_at, rating")
+    .select("id, title, format, finished_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -43,8 +43,6 @@ export default async function ReadPage({
     // you last left off reading — you're jumping there on purpose.
     initialLocation: jumpToLocation ?? progress?.location ?? null,
     isFinished: Boolean(book.finished_at),
-    // numeric columns arrive as strings from PostgREST.
-    rating: book.rating === null ? null : Number(book.rating),
     dailyGoalMinutes: preferences.goals.dailyMinutes,
     minutesBeforeSession: (todaySessions ?? []).reduce((sum, row) => sum + row.duration_seconds, 0) / 60,
   };

@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { Star } from "lucide-react";
 import { BookCover } from "@/components/book-cover";
 import { BookCardActions } from "@/components/book-card-actions";
 import { BookCardMenu } from "@/components/book-card-menu";
 import { bookStatus, type BookStatus } from "@/lib/library";
-import { formatRating } from "@/lib/rating";
 import { cn } from "@/lib/utils";
 
 export type LibraryBook = {
@@ -18,7 +16,6 @@ export type LibraryBook = {
   category_id?: string | null;
   finished_at?: string | null;
   percent?: number | null;
-  rating?: number | null;
 };
 
 const STATUS_BADGE: Record<BookStatus, { label: string; className: string } | null> = {
@@ -56,7 +53,7 @@ export function BookCard({ book, categories = [] }: {
           </span>
         )}
         <div className="absolute top-1 right-1 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100 sm:has-aria-expanded:opacity-100">
-          <BookCardMenu book={{ id: book.id, title: book.title, author: book.author, cover_url: book.cover_url, category_id: book.category_id ?? null, rating: book.rating ?? null }} categories={categories} />
+          <BookCardMenu book={{ id: book.id, title: book.title, author: book.author, cover_url: book.cover_url, category_id: book.category_id ?? null }} categories={categories} />
         </div>
       </div>
       <Link href={`/read/${book.id}`} className="truncate font-heading text-[15px] leading-5 font-semibold transition-colors hover:text-sage">
@@ -65,14 +62,7 @@ export function BookCard({ book, categories = [] }: {
       <p className="mt-0.5 truncate text-[11px] tracking-[0.02em] text-muted-foreground">{book.author ?? "Unknown author"}</p>
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5">
         <BookCardActions bookId={book.id} initialFavorite={book.is_favorite} initialWantToRead={book.want_to_read} />
-        <span className="flex items-center gap-2">
-          {book.rating ? (
-            <span role="img" aria-label={`Rated ${formatRating(book.rating)} out of 5`} className="flex items-center gap-0.5 text-[11px] font-semibold text-amber tabular-nums">
-              <Star className="size-3 fill-amber" aria-hidden="true" /> {formatRating(book.rating)}
-            </span>
-          ) : null}
-          {percent !== null && !book.finished_at && <span className="meta">{Math.round(percent)}%</span>}
-        </span>
+        {percent !== null && !book.finished_at && <span className="meta">{Math.round(percent)}%</span>}
       </div>
     </article>
   );

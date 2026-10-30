@@ -50,7 +50,6 @@ export function EpubReader({
   title,
   initialLocation,
   isFinished: initialIsFinished,
-  rating,
   dailyGoalMinutes,
   minutesBeforeSession,
   typography,
@@ -59,7 +58,6 @@ export function EpubReader({
   title: string;
   initialLocation: string | null;
   isFinished: boolean;
-  rating: number | null;
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
   typography: Typography;
@@ -291,8 +289,6 @@ export function EpubReader({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ReaderToolbar
-        bookId={bookId}
-        rating={rating}
         title={title}
         format="epub"
         elapsedSeconds={elapsedSeconds}

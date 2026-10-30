@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ArrowUpRight, BookMarked, LayoutGrid, List } from "lucide-react";
 import { BookCard, FormatBadge } from "@/components/book-card";
 import { BookCover } from "@/components/book-cover";
-import { StarRating } from "@/components/star-rating";
 import { BookCardMenu } from "@/components/book-card-menu";
 import { Button } from "@/components/ui/button";
 import { libraryHref, type LibraryParams, type Shelf } from "@/lib/library";
@@ -78,7 +77,6 @@ export function LibraryShelves({ shelves, tabs, params, categories }: {
                     <Link href={`/read/${book.id}`} className="block truncate font-heading text-base font-semibold hover:text-sage">{book.title}</Link>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{book.author ?? "Unknown author"}</p>
                   </div>
-                  {book.rating ? <StarRating rating={book.rating} className="hidden md:inline-flex" /> : null}
                   {book.percent !== null && !book.finished_at && <span className="meta hidden sm:block">{Math.round(book.percent)}%</span>}
                   <FormatBadge format={book.format} />
                   <Link href={`/read/${book.id}`} aria-label={`Open ${book.title}`} className="hidden rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground sm:block"><ArrowUpRight className="size-4" /></Link>

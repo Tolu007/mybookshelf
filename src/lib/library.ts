@@ -15,7 +15,6 @@ export type ShelfBook = {
   category_id: string | null;
   finished_at: string | null;
   added_at: string;
-  rating: number | null;
   // From reading_progress; null when the book has never been opened.
   percent: number | null;
   last_read_at: string | null;
@@ -41,7 +40,6 @@ export const SORT_OPTIONS = [
   { key: "recent", label: "Recently added" },
   { key: "read", label: "Recently read" },
   { key: "progress", label: "Reading progress" },
-  { key: "rating", label: "Highest rated" },
   { key: "title", label: "Title (A–Z)" },
   { key: "author", label: "Author (A–Z)" },
 ] as const;
@@ -95,9 +93,6 @@ export function sortBooks(books: ShelfBook[], sort: string | undefined) {
       return sorted.sort((a, b) => byDateDesc(a.last_read_at, b.last_read_at) || byDateDesc(a.added_at, b.added_at));
     case "progress":
       return sorted.sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1));
-    case "rating":
-      // Unrated books go last.
-      return sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
     case "title":
       return sorted.sort((a, b) => a.title.localeCompare(b.title));
     case "author":
