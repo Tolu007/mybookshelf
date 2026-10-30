@@ -3,6 +3,7 @@
 import { Pause, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReadingSession } from "@/hooks/use-reading-session";
+import type { PomodoroView } from "@/hooks/use-pomodoro";
 import { cn } from "@/lib/utils";
 
 export function clock(totalSeconds: number) {
@@ -15,10 +16,35 @@ export function clock(totalSeconds: number) {
 const PAUSE_LABEL: Record<NonNullable<ReadingSession["reason"]>, string> = {
   manual: "Paused",
   idle: "Paused · idle",
+  break: "On a break",
 };
 
+function countdown(totalSeconds: number) {
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+}
+
+function PomodoroBadge({ pomodoro }: { pomodoro: PomodoroView }) {
+  const label =
+    pomodoro.phase === "focus"
+      ? `Focus ${countdown(pomodoro.secondsLeft)}`
+      : pomodoro.phase === "break"
+        ? `Break ${countdown(pomodoro.secondsLeft)}`
+        : "Break over";
+  return (
+    <span
+      title={`${pomodoro.cycles} focus ${pomodoro.cycles === 1 ? "block" : "blocks"} done`}
+      className={cn(
+        "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+        pomodoro.phase === "focus" ? "bg-accent text-sage" : "bg-ribbon text-ribbon-foreground"
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 // The session clock in the reader bar, with pause/resume and stop.
-export function SessionTimer({ session }: { session: ReadingSession }) {
+export function SessionTimer({ session, pomodoro = null }: { session: ReadingSession; pomodoro?: PomodoroView | null }) {
   const { state, reason, elapsedSeconds, lastSessionSeconds } = session;
 
   if (state === "stopped") {
@@ -44,11 +70,12 @@ export function SessionTimer({ session }: { session: ReadingSession }) {
       </span>
       <time className={cn("font-mono text-xs font-semibold tabular-nums", !running && "text-muted-foreground")} aria-hidden="true">{clock(elapsedSeconds)}</time>
       <span className="sr-only">{Math.floor(elapsedSeconds / 60)}m this session</span>
+      {pomodoro && <PomodoroBadge pomodoro={pomodoro} />}
       <span className="flex items-center">
         {running ? (
           <Button variant="ghost" size="icon-xs" aria-label="Pause session" title="Pause" onClick={() => session.pause()}><Pause /></Button>
         ) : (
-          <Button variant="ghost" size="icon-xs" aria-label="Resume session" title="Resume" onClick={session.resume}><Play /></Button>
+          <Button variant="ghost" size="icon-xs" aria-label={reason === "break" ? "End break and resume" : "Resume session"} title="Resume" onClick={session.resume}><Play /></Button>
         )}
         <Button variant="ghost" size="icon-xs" aria-label="Stop and save session" title="Stop and save" onClick={session.stop}><Square /></Button>
       </span>

@@ -9,8 +9,8 @@ const MIN_SESSION_SECONDS = 30;
 export type SessionState = "running" | "paused" | "stopped";
 // Why a session is paused. Hiding the tab also stops the clock, but that
 // isn't a pause: it resumes by itself when you come back. "idle" pauses
-// resume on the next page turn.
-export type PauseReason = "manual" | "idle";
+// resume on the next page turn; "break" is a Pomodoro break.
+export type PauseReason = "manual" | "idle" | "break";
 
 export type ReadingSession = {
   elapsedSeconds: number;

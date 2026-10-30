@@ -64,6 +64,9 @@ export const AUTO_PAUSE_OPTIONS = [3, 5, 10] as const;
 // Minutes of reading between chimes.
 export const CHIME_OPTIONS = [15, 30, 45, 60] as const;
 
+export const FOCUS_OPTIONS = [15, 25, 45, 50] as const;
+export const BREAK_OPTIONS = [5, 10, 15] as const;
+
 export type Preferences = {
   reader: {
     font: ReaderFont;
@@ -82,13 +85,16 @@ export type Preferences = {
     // null means off.
     autoPauseMinutes: number | null;
     chimeMinutes: number | null;
+    pomodoro: boolean;
+    focusMinutes: number;
+    breakMinutes: number;
   };
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
   reader: { font: "newsreader", fontSize: 18, lineHeight: 1.65, measure: 72, paper: "auto", justify: false },
   goals: { dailyMinutes: null, yearlyBooks: null },
-  timer: { autoPauseMinutes: null, chimeMinutes: null },
+  timer: { autoPauseMinutes: null, chimeMinutes: null, pomodoro: false, focusMinutes: 25, breakMinutes: 5 },
 };
 
 function pick<T>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -122,6 +128,9 @@ export function parsePreferences(raw: unknown): Preferences {
     timer: {
       autoPauseMinutes: pick<number | null>(timer.autoPauseMinutes, AUTO_PAUSE_OPTIONS, null),
       chimeMinutes: pick<number | null>(timer.chimeMinutes, CHIME_OPTIONS, null),
+      pomodoro: typeof timer.pomodoro === "boolean" ? timer.pomodoro : false,
+      focusMinutes: pick<number>(timer.focusMinutes, FOCUS_OPTIONS, 25),
+      breakMinutes: pick<number>(timer.breakMinutes, BREAK_OPTIONS, 5),
     },
   };
 }

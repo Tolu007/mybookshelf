@@ -2,12 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
+import { Bell, Check, Coffee, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   AUTO_PAUSE_OPTIONS,
+  BREAK_OPTIONS,
   CHIME_OPTIONS,
+  FOCUS_OPTIONS,
   DEFAULT_PREFERENCES,
   FONT_SIZE_RANGE,
   LINE_HEIGHTS,
@@ -278,6 +280,27 @@ export function SettingsForm({ initial, profile }: {
                 options={[{ value: 0, label: "Off" }, ...CHIME_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
                 onChange={(minutes) => setTimer({ chimeMinutes: minutes || null })}
               />
+            </div>
+            <div className="space-y-3 rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <label className="flex items-start justify-between gap-4">
+                <span>
+                  <span className="flex items-center gap-2 text-sm font-semibold"><Coffee className="size-4 text-sage" aria-hidden="true" /> Pomodoro focus cycles</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Read in focused blocks with short breaks. A chime marks each change; breaks don&apos;t count as reading time.</span>
+                </span>
+                <Switch checked={prefs.timer.pomodoro} onCheckedChange={(pomodoro) => setTimer({ pomodoro })} aria-label="Pomodoro focus cycles" />
+              </label>
+              {prefs.timer.pomodoro && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="meta mb-2">Focus</p>
+                    <Segmented label="Focus length" value={prefs.timer.focusMinutes} options={FOCUS_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes}m` }))} onChange={(focusMinutes) => setTimer({ focusMinutes })} />
+                  </div>
+                  <div>
+                    <p className="meta mb-2">Break</p>
+                    <Segmented label="Break length" value={prefs.timer.breakMinutes} options={BREAK_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes}m` }))} onChange={(breakMinutes) => setTimer({ breakMinutes })} />
+                  </div>
+                </div>
+              )}
             </div>
           </Section>
 

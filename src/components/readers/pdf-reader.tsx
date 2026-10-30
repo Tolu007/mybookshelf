@@ -10,6 +10,7 @@ import { AddNoteButton } from "@/components/readers/add-note-button";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useIntervalChime } from "@/hooks/use-interval-chime";
+import { usePomodoro } from "@/hooks/use-pomodoro";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
@@ -62,6 +63,7 @@ export function PdfReader({
   const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
   const { markActivity } = session;
   useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
+  const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
@@ -361,6 +363,7 @@ export function PdfReader({
         title={title}
         format="pdf"
         session={session}
+        pomodoro={pomodoro}
         isFinished={isFinished}
         onMarkFinished={markFinished}
         dailyGoalMinutes={dailyGoalMinutes}

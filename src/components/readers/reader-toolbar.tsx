@@ -6,11 +6,13 @@ import { ArrowLeft, Check, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionTimer } from "@/components/readers/session-timer";
 import type { ReadingSession } from "@/hooks/use-reading-session";
+import type { PomodoroView } from "@/hooks/use-pomodoro";
 
 export function ReaderToolbar({
   title,
   format,
   session,
+  pomodoro = null,
   isFinished,
   onMarkFinished,
   dailyGoalMinutes = null,
@@ -20,6 +22,7 @@ export function ReaderToolbar({
   title: string;
   format?: string;
   session: ReadingSession;
+  pomodoro?: PomodoroView | null;
   isFinished: boolean;
   onMarkFinished: () => void;
   // Today's goal from Settings, and what was already read today before
@@ -45,7 +48,7 @@ export function ReaderToolbar({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
-          <SessionTimer session={session} />
+          <SessionTimer session={session} pomodoro={pomodoro} />
 
           {dailyGoalMinutes && (
             <div className="hidden items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 md:flex dark:bg-secondary" title="Today's reading goal">

@@ -214,6 +214,17 @@ test("session timer offers pause and stop while reading, resume when paused, and
   assert.equal(preferences.parsePreferences({ timer: { chimeMinutes: 30 } }).timer.chimeMinutes, 30);
   assert.equal(preferences.parsePreferences({ timer: { chimeMinutes: 20 } }).timer.chimeMinutes, null);
   assert.match(render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: null })), /aria-label="Interval chime"/);
+  assert.match(render(h(SessionTimer, { session: fakeSession({ elapsedSeconds: 60 }), pomodoro: { phase: "focus", secondsLeft: 1102, cycles: 0 } })), /Focus 18:22/);
+  const onBreak = render(h(SessionTimer, { session: fakeSession({ state: "paused", reason: "break" }), pomodoro: { phase: "break", secondsLeft: 250, cycles: 1 } }));
+  assert.match(onBreak, /On a break/);
+  assert.match(onBreak, /Break 4:10/);
+  assert.match(onBreak, /aria-label="End break and resume"/);
+  assert.match(render(h(SessionTimer, { session: fakeSession({ state: "paused", reason: "break" }), pomodoro: { phase: "break_over", secondsLeft: 0, cycles: 1 } })), /Break over/);
+  const pomodoroPrefs = preferences.parsePreferences({ timer: { pomodoro: true, focusMinutes: 45, breakMinutes: 7 } }).timer;
+  assert.deepEqual([pomodoroPrefs.pomodoro, pomodoroPrefs.focusMinutes, pomodoroPrefs.breakMinutes], [true, 45, 5]);
+  const withPomodoro = render(h(SettingsForm, { initial: { ...preferences.DEFAULT_PREFERENCES, timer: { ...preferences.DEFAULT_PREFERENCES.timer, pomodoro: true } }, profile: null }));
+  assert.match(withPomodoro, /aria-label="Focus length"/);
+  assert.doesNotMatch(render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: null })), /Focus length/);
 });
 
 test("reader toolbar shows today's goal including the current and stopped sessions, and a book progress ribbon", () => {
@@ -251,7 +262,7 @@ test("settings form offers real options only and saves only when something chang
   assert.match(html, /Daily reading target/);
   assert.match(html, /Profile card/);
   assert.match(html, /disabled=""[^>]*>.*Save changes/s);
-  assert.doesNotMatch(html, /Readwise|Obsidian Markdown|LaTeX|Pomodoro/);
+  assert.doesNotMatch(html, /Readwise|Obsidian Markdown|LaTeX/);
 });
 
 test("stats helpers find the peak weekday and count active days in range", () => {
