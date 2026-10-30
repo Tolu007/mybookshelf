@@ -42,6 +42,7 @@ const library = require("../src/lib/library.ts");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart, YearlyBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
 const { fetchAll } = require("../src/lib/supabase/fetch-all.ts");
+const { FinishedBooksTable } = require("../src/components/stats/finished-books-table.tsx");
 const { ReaderLoadStatus } = require("../src/components/readers/reader-load-status.tsx");
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
@@ -343,6 +344,20 @@ test("year views find streaks within the period and total reading per year", () 
   const chart = render(h(YearlyBarChart, { dailyMinutes: new Map([["2025-01-01", 120], ["2026-01-01", 60]]), untilYear: 2026 }));
   assert.match(chart, /title="2025: 2h 0m"[^>]*bg-ribbon/);
   assert.match(chart, /title="2026: 1h 0m"/);
+});
+
+test("finished-books table lists books with date, time and sessions, or an empty note", () => {
+  const html = render(h(FinishedBooksTable, { periodName: "2026", books: [
+    { id: "book-1", title: "Middlemarch", author: "George Eliot", cover_url: null, finished_at: "2026-10-18T12:00:00Z", shelf: "Fiction", minutes: 1185, sessions: 14 },
+  ] }));
+  assert.match(html, /1 in 2026/);
+  assert.match(html, /Middlemarch/);
+  assert.match(html, /href="\/read\/book-1"/);
+  assert.match(html, /Oct 18, 2026/);
+  assert.match(html, /19h 45m/);
+  assert.match(html, />14</);
+  assert.match(html, /Fiction/);
+  assert.match(render(h(FinishedBooksTable, { periodName: "2024", books: [] })), /No books finished in 2024 yet/);
 });
 
 test("long result sets are fetched page by page until a short page", async () => {

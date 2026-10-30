@@ -43,7 +43,7 @@ Suggested order: cheapest and most visible first.
 - [x] **Reading speed on Stats.** Average words per minute for the year, in the Time invested tile.
 - [ ] **Best reading window.** The time of day you read most, from session start times.
 - [ ] **Genre donut.** Books by category.
-- [ ] **Finished-books table.** Completion date, time invested, sessions, pace.
+- [x] **Finished-books table.** Shelf, completion date, time invested and sessions, for the selected year or all time.
 - [x] **Year switcher.** Every year since you started, plus All time (year-by-year chart).
 - [ ] **Export stats.** Download as CSV or JSON.
 

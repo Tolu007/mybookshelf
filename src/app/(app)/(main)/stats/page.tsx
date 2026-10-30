@@ -9,6 +9,7 @@ import { StreakHeatmap } from "@/components/stats/streak-heatmap";
 import { ReadingBarChart, YearlyBarChart } from "@/components/stats/reading-bar-chart";
 import { ProgressRibbon } from "@/components/library/reading-card";
 import { PageHeader } from "@/components/page-header";
+import { FinishedBooksTable, type FinishedBookRow } from "@/components/stats/finished-books-table";
 import { cn } from "@/lib/utils";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import {
@@ -88,26 +89,58 @@ export default async function StatsPage({
     if (sessionsFrom) query = query.gte("local_date", sessionsFrom).lte("local_date", yearEnd);
     return query.range(from, to);
   };
-  let finishedQuery = supabase.from("books").select("id", { count: "exact", head: true }).not("finished_at", "is", null);
+  let finishedQuery = supabase
+    .from("books")
+    .select("id, title, author, cover_url, finished_at, category_id")
+    .not("finished_at", "is", null)
+    .order("finished_at", { ascending: false });
   if (!allTime) {
     finishedQuery = finishedQuery
       .gte("finished_at", new Date(year, 0, 1).toISOString())
       .lt("finished_at", new Date(year + 1, 0, 1).toISOString());
   }
 
-  const [{ data: stats }, { count: finishedCount }, { data: sessions }, preferences, averageWpm] = await Promise.all([
+  const [{ data: stats }, { data: finishedBooks }, { data: sessions }, preferences, averageWpm, { data: categories }] = await Promise.all([
     supabase.from("user_stats").select("current_streak, longest_streak").eq("user_id", user.id).maybeSingle(),
     finishedQuery,
     fetchAll(sessionsPage),
     loadPreferences(supabase, user.id),
     loadAverageWpm(supabase, allTime ? {} : { from: yearStart, to: yearEnd }),
+    supabase.from("categories").select("id, name"),
   ]);
+
+  // Time and sessions per finished book, across all of its reading.
+  // IDs go in the URL, so ask in batches to stay well under length limits.
+  const finishedIds = (finishedBooks ?? []).map((book) => book.id);
+  const idBatches = Array.from({ length: Math.ceil(finishedIds.length / 100) }, (_, index) => finishedIds.slice(index * 100, index * 100 + 100));
+  const bookSessions = (
+    await Promise.all(
+      idBatches.map((ids) =>
+        fetchAll<{ book_id: string; duration_seconds: number }>((from, to) =>
+          supabase.from("reading_sessions").select("id, book_id, duration_seconds").in("book_id", ids).order("id").range(from, to)
+        )
+      )
+    )
+  ).flatMap((result) => result.data);
+  const finishedRows: FinishedBookRow[] = (finishedBooks ?? []).map((book) => {
+    const own = bookSessions.filter((session) => session.book_id === book.id);
+    return {
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      cover_url: book.cover_url,
+      finished_at: book.finished_at,
+      shelf: (categories ?? []).find((category) => category.id === book.category_id)?.name ?? null,
+      minutes: own.reduce((sum, session) => sum + session.duration_seconds, 0) / 60,
+      sessions: own.length,
+    };
+  });
 
   const allRows = sessions ?? [];
   const periodRows = allTime ? allRows : allRows.filter((row) => row.local_date >= yearStart);
   const dailyMinutes = buildDailyMinutesMap(periodRows);
   const periodMinutes = sumMinutes(periodRows);
-  const finished = finishedCount ?? 0;
+  const finished = finishedRows.length;
   const streak = stats?.current_streak ?? 0;
   const longestEver = stats?.longest_streak ?? 0;
   const longestInPeriod = allTime ? longestEver : longestStreakIn(dailyMinutes);
@@ -308,6 +341,8 @@ export default async function StatsPage({
           </section>
         </>
       )}
+
+      <FinishedBooksTable books={finishedRows} periodName={periodName} />
     </div>
   );
 }
