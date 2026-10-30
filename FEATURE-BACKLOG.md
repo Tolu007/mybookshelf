@@ -53,7 +53,7 @@ Suggested order: cheapest and most visible first.
 - [x] **Automatic session pause** after 3, 5 or 10 minutes without a page turn (Settings → Timer & focus).
 - [x] **Interval chimes** every 15, 30, 45 or 60 minutes of reading, with a preview in Settings.
 - [x] **Pomodoro focus cycles.** Focus 15/25/45/50 min, break 5/10/15 min; breaks pause the session.
-- [ ] **Full library export.** Notes, metadata and reading logs as Markdown, JSON or PDF.
+- [x] **Full library export.** Markdown (journal + per-book highlights and notes) or full JSON, from Settings → Your data.
 - [ ] **Storage usage.** Drive space used by Shelf.
 - [ ] **Metadata enrichment.** Look up book details (OpenLibrary) on upload.
 

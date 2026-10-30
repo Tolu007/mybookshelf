@@ -40,6 +40,8 @@ const { JournalList } = require("../src/components/journal/journal-list.tsx");
 const { JournalComposer } = require("../src/components/journal/journal-composer.tsx");
 const library = require("../src/lib/library.ts");
 const journal = require("../src/lib/journal.ts");
+const exportLib = require("../src/lib/export.ts");
+const { DataSection } = require("../src/components/settings/data-section.tsx");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart, YearlyBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
 const { fetchAll } = require("../src/lib/supabase/fetch-all.ts");
@@ -402,6 +404,38 @@ test("journal pages clamp to what exists and keep search and tab in page links",
   assert.match(pageLink("next"), /href="\/journal\?q=idea&amp;tab=in_book&amp;page=3"/);
   assert.match(html, /Page 2 of 3/);
   assert.doesNotMatch(render(h(JournalList, { entries: [note], counts: { all: 1, in_book: 1, standalone: 0, highlights: 0 }, tab: "all", query: "", pagination: onePage })), /Journal pages/);
+});
+
+test("library export reads as a journal and per-book notes, and links both formats", () => {
+  const data = {
+    exported_at: "2026-10-30T09:00:00Z",
+    note: "",
+    books: [
+      { id: "b1", title: "Meditations", author: "Marcus Aurelius", format: "epub", category: "Stoics", added_at: "2026-01-01T00:00:00Z", finished_at: "2026-03-02T00:00:00Z", want_to_read: false, is_favorite: true, progress_percent: 100 },
+      { id: "b2", title: "Unopened", author: null, format: "pdf", category: null, added_at: "2026-01-01T00:00:00Z", finished_at: null, want_to_read: true, is_favorite: false, progress_percent: null },
+    ],
+    annotations: [
+      { id: "a1", type: "highlight", book_id: "b1", location: "x", excerpt: "You have power over your mind.", note: null, created_at: "2026-02-01T10:00:00Z" },
+      { id: "a2", type: "note", book_id: "b1", location: "x", excerpt: null, note: "Read this\nagain.", created_at: "2026-02-02T10:00:00Z" },
+      { id: "a3", type: "note", book_id: null, location: null, excerpt: null, note: "Ask and you shall receive.", created_at: "2026-02-03T10:00:00Z" },
+      { id: "a4", type: "bookmark", book_id: "b1", location: "y", excerpt: null, note: null, created_at: "2026-02-04T10:00:00Z" },
+    ],
+    reading_sessions: [{ book_id: "b1", started_at: "s", ended_at: "e", duration_seconds: 5400, local_date: "2026-02-01" }],
+    stats: null,
+    preferences: null,
+  };
+  const md = exportLib.buildExportMarkdown(data);
+  assert.match(md, /^# Shelf export/);
+  assert.match(md, /## Journal\n\n### Feb 3, 2026\n\nAsk and you shall receive\./);
+  assert.match(md, /### Meditations\n\nMarcus Aurelius · Stoics · EPUB · Finished Mar 2, 2026 · 1h 30m reading · Favorite/);
+  assert.match(md, /#### Highlights\n\n> You have power over your mind\./);
+  assert.match(md, /- Feb 2, 2026: Read this again\./);
+  assert.match(md, /### Unopened\n\nPDF · Want to read/);
+  assert.doesNotMatch(md, /\n{3,}/);
+  assert.equal(exportLib.exportFileName("json", new Date(2026, 9, 30)), "shelf-export-2026-10-30.json");
+  const section = render(h(DataSection));
+  assert.match(section, /href="\/api\/export\?format=markdown" download=""/);
+  assert.match(section, /href="\/api\/export\?format=json" download=""/);
 });
 
 test("long result sets are fetched page by page until a short page", async () => {

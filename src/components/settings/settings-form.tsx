@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, Check, Coffee, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { SettingsSection as Section } from "@/components/settings/settings-section";
 import {
   AUTO_PAUSE_OPTIONS,
   BREAK_OPTIONS,
@@ -32,19 +33,6 @@ const FONT_VARS: Record<ReaderFont, string> = {
   literata: "var(--font-literata)",
   jakarta: "var(--font-jakarta)",
 };
-
-function Section({ id, index, title, description, children }: { id: string; index: string; title: string; description: string; children: ReactNode }) {
-  return (
-    <section aria-labelledby={id} className="surface space-y-5 p-5 sm:p-6">
-      <div>
-        <p className="eyebrow">Section {index}</p>
-        <h2 id={id} className="mt-1 font-heading text-xl leading-7 font-semibold">{title}</h2>
-        <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
 
 function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;
@@ -95,9 +83,11 @@ function Stepper({ label, value, unit, step, min, max, onChange }: {
   );
 }
 
-export function SettingsForm({ initial, profile }: {
+export function SettingsForm({ initial, profile, extra = null }: {
   initial: Preferences;
   profile: ReactNode;
+  // Server-rendered sections shown after the form's own (e.g. data export).
+  extra?: ReactNode;
 }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState(initial);
@@ -318,6 +308,7 @@ export function SettingsForm({ initial, profile }: {
               </div>
             </div>
           </Section>
+          {extra}
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-20 xl:self-start">
