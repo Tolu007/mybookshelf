@@ -39,6 +39,7 @@ const { SidebarContent } = require("../src/components/shell/sidebar-content.tsx"
 const { JournalList } = require("../src/components/journal/journal-list.tsx");
 const { JournalComposer } = require("../src/components/journal/journal-composer.tsx");
 const library = require("../src/lib/library.ts");
+const journal = require("../src/lib/journal.ts");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart, YearlyBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
 const { fetchAll } = require("../src/lib/supabase/fetch-all.ts");
@@ -166,10 +167,11 @@ test("sidebar links every section, marks the active one, and labels the collapse
 });
 
 test("journal handles empty entries, standalone reflections, highlights, and exact locations", () => {
-  assert.match(render(h(JournalList, { initialEntries: [] })), /Good thoughts deserve a place/);
+  const counts = { all: 3, in_book: 1, standalone: 1, highlights: 1 };
+  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "" })), /Good thoughts deserve a place/);
   const standalone = { ...note, id: "note-2", note: "A thought of my own.", book: null, location: null };
   const highlight = { ...note, id: "hl-1", kind: "highlight", note: null, excerpt: "A passage worth keeping." };
-  const html = render(h(JournalList, { initialEntries: [note, standalone, highlight] }));
+  const html = render(h(JournalList, { entries: [note, standalone, highlight], counts, tab: "all", query: "" }));
   assert.match(html, /An idea worth keeping/);
   assert.match(html, /href="\/read\/book-1\?location=epubcfi/);
   assert.match(html, /aria-label="Delete note from A thoughtful book"/);
@@ -178,6 +180,29 @@ test("journal handles empty entries, standalone reflections, highlights, and exa
   assert.match(html, /aria-label="Delete entry"/);
   assert.match(html, /A passage worth keeping/);
   assert.match(html, /All entries<span[^>]*>3</);
+  assert.match(html, /aria-current="page"[^>]*href="\/journal"/);
+});
+
+test("journal search matches notes, passages and titles, marks matches, and keeps the tab", () => {
+  const standalone = { ...note, id: "note-2", note: "Stoic calm (on mornings).", book: null };
+  assert.equal(journal.matchesQuery(note, "IDEA"), true);
+  assert.equal(journal.matchesQuery(note, "thoughtful"), true);
+  assert.equal(journal.matchesQuery(standalone, "thoughtful"), false);
+  assert.equal(journal.matchesQuery(standalone, "  "), true);
+  assert.deepEqual(journal.splitOnMatches("Calm, then calm again", "calm"), ["", "Calm", ", then ", "calm", " again"]);
+  assert.deepEqual(journal.splitOnMatches("(on mornings)", "(on"), ["", "(on", " mornings)"]);
+  assert.equal(journal.parseTab("highlights"), "highlights");
+  assert.equal(journal.parseTab("nonsense"), "all");
+  assert.deepEqual(journal.tabCounts([note, standalone]), { all: 2, in_book: 1, standalone: 1, highlights: 0 });
+  assert.equal(journal.journalHref({ q: " stoic ", tab: "standalone" }), "/journal?q=stoic&tab=standalone");
+  assert.equal(journal.journalHref({ tab: "all" }), "/journal");
+  const html = render(h(JournalList, { entries: [standalone], counts: { all: 1, in_book: 0, standalone: 1, highlights: 0 }, tab: "standalone", query: "calm" }));
+  assert.match(html, /<mark[^>]*>calm<\/mark>/);
+  assert.match(html, /1 entry matches/);
+  assert.match(html, /name="tab" value="standalone"/);
+  assert.match(html, /href="\/journal\?tab=standalone"[^>]*>.*Clear search/s);
+  assert.match(html, /href="\/journal\?q=calm&amp;tab=highlights"/);
+  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "zzz" })), /Nothing matches that search/);
 });
 
 test("journal composer writes standalone entries and links books only when there are some", () => {

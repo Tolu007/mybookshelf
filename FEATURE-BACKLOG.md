@@ -19,6 +19,7 @@ Suggested order: cheapest and most visible first.
 - [ ] **Book excerpts on entries.** Attach the highlighted passage to a journal entry (shown as a "Book excerpt" quote block).
 - [ ] **Formatting toolbar.** Bold, italic, quote, list and link (Markdown) in the writing area.
 - [x] **Filter tabs.** All / In-book notes / Standalone / Highlights, with counts.
+- [x] **Search.** Across notes, highlighted passages and book titles, with matches marked; works with the tabs.
 - [x] **Indexed volumes sidebar.** Books ranked by number of journal entries.
 - [ ] **Journal cadence chart.** Entries per day this month.
 - [ ] **Export journal.** Download all entries as Markdown.
