@@ -17,6 +17,7 @@ import {
   MEASURES,
   PAPERS,
   READER_FONTS,
+  READER_FONT_VARS,
   type Paper,
   type Preferences,
   type ReaderFont,
@@ -25,14 +26,7 @@ import { applyThemeChoice, readThemeChoice, type ThemeChoice } from "@/lib/theme
 import { playChime } from "@/lib/chime";
 import { cn } from "@/lib/utils";
 
-// CSS variables from next/font: Newsreader and Jakarta are app-wide; the
-// settings page adds Garamond and Literata (lib/reader-fonts.ts).
-const FONT_VARS: Record<ReaderFont, string> = {
-  newsreader: "var(--font-newsreader)",
-  garamond: "var(--font-garamond)",
-  literata: "var(--font-literata)",
-  jakarta: "var(--font-jakarta)",
-};
+const FONT_VARS = READER_FONT_VARS;
 
 function Segmented<T extends string | number>({ label, value, options, onChange }: {
   label: string;

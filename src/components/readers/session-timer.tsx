@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play, RotateCcw, Square } from "lucide-react";
+import { CircleStop, Pause, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReadingSession } from "@/hooks/use-reading-session";
 import type { PomodoroView } from "@/hooks/use-pomodoro";
@@ -50,11 +50,11 @@ export function SessionTimer({ session, pomodoro = null }: { session: ReadingSes
   if (state === "stopped") {
     const saved = lastSessionSeconds ?? 0;
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-background py-1 pr-1 pl-2.5 dark:bg-secondary">
+      <div className="flex items-center gap-2 rounded-full bg-secondary py-1 pr-1 pl-3">
         <span role="status" className="text-[11px] font-semibold text-muted-foreground">
           {saved > 0 ? `Session saved · ${Math.max(1, Math.round(saved / 60))}m` : "Session too short to save"}
         </span>
-        <Button size="xs" onClick={session.start}>
+        <Button size="xs" onClick={session.start} className="rounded-full">
           <RotateCcw /> New session
         </Button>
       </div>
@@ -63,22 +63,22 @@ export function SessionTimer({ session, pomodoro = null }: { session: ReadingSes
 
   const running = state === "running";
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-background py-1 pr-1 pl-2.5 dark:bg-secondary">
-      <span className={cn("size-1.5 rounded-full", running ? "animate-pulse bg-ribbon motion-reduce:animate-none" : "bg-muted-foreground")} aria-hidden="true" />
-      <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-        {running ? "In focus" : PAUSE_LABEL[reason ?? "manual"]}
-      </span>
-      <time className={cn("font-mono text-xs font-semibold tabular-nums", !running && "text-muted-foreground")} aria-hidden="true">{clock(elapsedSeconds)}</time>
-      <span className="sr-only">{Math.floor(elapsedSeconds / 60)}m this session</span>
-      {pomodoro && <PomodoroBadge pomodoro={pomodoro} />}
-      <span className="flex items-center">
-        {running ? (
-          <Button variant="ghost" size="icon-xs" aria-label="Pause session" title="Pause" onClick={() => session.pause()}><Pause /></Button>
-        ) : (
-          <Button variant="ghost" size="icon-xs" aria-label={reason === "break" ? "End break and resume" : "Resume session"} title="Resume" onClick={session.resume}><Play /></Button>
-        )}
-        <Button variant="ghost" size="icon-xs" aria-label="Stop and save session" title="Stop and save" onClick={session.stop}><Square /></Button>
-      </span>
+    <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1">
+        <span className={cn("size-2.5 rounded-full", running ? "animate-pulse bg-ribbon motion-reduce:animate-none" : "bg-muted-foreground")} aria-hidden="true" />
+        <span className={cn("text-[11px] font-semibold tracking-[0.06em] uppercase", running ? "text-amber" : "text-muted-foreground")}>
+          {running ? "In focus" : PAUSE_LABEL[reason ?? "manual"]}
+        </span>
+        <time className={cn("font-mono text-sm font-semibold tracking-tight tabular-nums", !running && "text-muted-foreground")} aria-hidden="true">{clock(elapsedSeconds)}</time>
+        <span className="sr-only">{Math.floor(elapsedSeconds / 60)}m this session</span>
+        {pomodoro && <PomodoroBadge pomodoro={pomodoro} />}
+      </div>
+      {running ? (
+        <Button variant="ghost" size="icon-sm" aria-label="Pause session" title="Pause" onClick={() => session.pause()} className="text-muted-foreground hover:text-sage"><Pause /></Button>
+      ) : (
+        <Button variant="ghost" size="icon-sm" aria-label={reason === "break" ? "End break and resume" : "Resume session"} title="Resume" onClick={session.resume} className="text-muted-foreground hover:text-sage"><Play /></Button>
+      )}
+      <Button variant="ghost" size="icon-sm" aria-label="Stop and save session" title="Stop and save" onClick={session.stop} className="text-muted-foreground hover:text-amber"><CircleStop /></Button>
     </div>
   );
 }

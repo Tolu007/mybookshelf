@@ -52,7 +52,10 @@ const { ReaderLoadStatus } = require("../src/components/readers/reader-load-stat
 const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/lib/book-download.ts");
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
-const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
+const { ReaderScrubber } = require("../src/components/readers/reader-toolbar.tsx");
+const { ReaderPage, paperStyle } = require("../src/components/readers/reader-page.tsx");
+const { Typecraft } = require("../src/components/readers/typecraft.tsx");
+const chapters = require("../src/lib/reader-chapters.ts");
 const { SessionTimer } = require("../src/components/readers/session-timer.tsx");
 const { ReaderNotesPanel, NotesPanelToggle } = require("../src/components/readers/reader-notes-panel.tsx");
 const speed = require("../src/lib/reading-speed.ts");
@@ -274,8 +277,10 @@ test("reading speed counts words, ignores flips and long stays, and formats time
   assert.equal(speed.formatTimeLeft(0.4), "under a minute");
   assert.equal(speed.formatTimeLeft(12.4), "12 min");
   assert.equal(speed.formatTimeLeft(125), "2h 5m");
-  const progress = render(h(ReaderProgress, { percent: 40, label: "Page 4 of 10", detail: "240 wpm · ~12 min left in book" }));
-  assert.match(progress, /240 wpm · ~12 min left in book/);
+  const scrubber = render(h(ReaderScrubber, { percent: 40, timeLeft: "~12 min left in chapter 4", speed: "240 wpm", chapter: "4 of 12", position: "Page 4 of 10" }));
+  assert.match(scrubber, /~12 min left in chapter 4/);
+  assert.match(scrubber, /Reading cadence: 240 wpm/);
+  assert.match(scrubber, /Chapter: <strong[^>]*>4 of 12/);
 });
 
 test("sessions are still recorded when the speed columns don't exist yet", async () => {
@@ -304,30 +309,79 @@ test("sessions are still recorded when the speed columns don't exist yet", async
   assert.equal(inserts[1].duration_seconds, 600);
 });
 
-test("notes panel writes notes pinned to the current page and closes to nothing", () => {
-  const props = { id: "notes", bookId: book.id, onClose() {}, getCurrentLocation: () => "12", describeLocation: (location) => `Page ${location}`, onJumpTo() {}, refreshKey: 0, onSaved() {} };
+test("notes panel writes notes pinned to the current page, logs passages, and closes to nothing", () => {
+  const annotations = [
+    { id: "a1", type: "highlight", location: "118", excerpt: "A passage.", note: null, created_at: "2026-10-30T10:00:00Z" },
+    { id: "a2", type: "note", location: "120", excerpt: null, note: "A thought.", created_at: "2026-10-30T11:00:00Z" },
+  ];
+  const props = { id: "notes", bookId: book.id, bookTitle: "The Overstory", onClose() {}, annotations, loading: false, onDelete() {}, getCurrentLocation: () => "12", describeLocation: (location) => `Page ${location}`, onJumpTo() {}, onSaved() {} };
   const open = render(h(ReaderNotesPanel, { ...props, open: true }));
   assert.match(open, /aria-label="Session journal"/);
-  assert.match(open, /Write a note/);
-  assert.match(open, /Page 12/);
+  assert.match(open, /The Overstory • 1 note, 1 highlight/);
+  assert.match(open, /Write marginalia/);
+  assert.match(open, /Page 12 citation/);
+  assert.match(open, /Page 118/);
+  assert.match(open, /A passage\./);
+  assert.match(open, /aria-label="Delete highlight"/);
   assert.match(open, /aria-label="Close notes panel"/);
-  assert.match(open, /disabled=""[^>]*>.*Save note/s);
+  assert.match(open, /disabled=""[^>]*>.*Save to journal/s);
   assert.equal(render(h(ReaderNotesPanel, { ...props, open: false })), "");
-  const toggle = render(h(NotesPanelToggle, { open: false, onToggle() {}, panelId: "notes" }));
+  const toggle = render(h(NotesPanelToggle, { open: false, onToggle() {}, panelId: "notes", count: 14 }));
   assert.match(toggle, /aria-expanded="false"/);
   assert.match(toggle, /aria-controls="notes"/);
+  assert.match(toggle, />14</);
 });
 
-test("reader toolbar shows today's goal including the current and stopped sessions, and a book progress ribbon", () => {
-  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", session: fakeSession({ elapsedSeconds: 600, savedSeconds: 300 }), isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 5 }));
+test("reader chapters come from where each one starts, and know which one you're in", () => {
+  const list = chapters.tidyChapters([
+    { label: " Roots ", start: 3 },
+    { label: "Trunk", start: 9 },
+    { label: "Duplicate", start: 3 },
+    { label: "", start: 12 },
+    { label: "Prologue", start: 1 },
+  ]);
+  assert.deepEqual(list.map((chapter) => [chapter.label, chapter.start]), [["Prologue", 1], ["Roots", 3], ["Trunk", 9]]);
+  assert.equal(chapters.chapterAt(list, 0), null);
+  const place = chapters.chapterAt(list, 5);
+  assert.deepEqual([place.number, place.count, place.chapter.label, place.next.label], [2, 3, "Roots", "Trunk"]);
+  assert.equal(chapters.chapterAt(list, 40).next, null);
+  const cfis = ["epubcfi(/6/2!/4/2)", "epubcfi(/6/2!/4/8)", "epubcfi(/6/4!/4/2)", "epubcfi(/6/6!/4/2)"];
+  assert.deepEqual(chapters.chapterPositions(cfis, ["/6/4", "/6/6", "/6/40"]), [0.5, 0.75, null]);
+});
+
+test("reader page turns from its footer, and paper can be textured", () => {
+  const html = render(h(ReaderPage, { eyebrow: "Part I • Roots", caption: "Richard Powers", pageLabel: "142", onPrev() {}, onNext() {}, canPrev: false }, h("div", null, "Text")));
+  assert.match(html, /Part I • Roots/);
+  assert.match(html, /Richard Powers/);
+  assert.match(html, />142</);
+  assert.match(html, /aria-label="Previous page" disabled=""|disabled=""[^>]*aria-label="Previous page"/);
+  assert.match(html, /aria-label="Next page"/);
+  assert.equal(paperStyle("#faf7f2", "#111", true).backgroundSize, "18px 18px");
+  assert.equal(paperStyle("#1a201c", "#eee", false).backgroundImage, undefined);
+});
+
+test("typecraft opens from a labelled trigger in the reader bar", () => {
+  const html = render(h(Typecraft, { typography: preferences.DEFAULT_PREFERENCES.reader, onChange() {}, onSaveDefault: async () => true }));
+  assert.match(html, /Typecraft/);
+  assert.match(html, /aria-haspopup="dialog"|aria-expanded="false"/);
+});
+
+test("reader toolbar shows today's goal including the current and stopped sessions, where you are, and a book position line", () => {
+  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", chapterLabel: "Chapter 4: Roots", progressLabel: "28% (p. 142/502)", session: fakeSession({ elapsedSeconds: 600, savedSeconds: 300 }), isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 5, trailing: h("button", null, "Journal") }));
   assert.match(html, /00:10:00/);
-  assert.match(html, /20\/40m/);
+  assert.match(html, /20 \/ 40m/);
+  assert.match(html, /Chapter 4: Roots/);
+  assert.match(html, /28% \(p\. 142\/502\)/);
+  assert.ok(html.indexOf("Finish book") < html.indexOf(">Journal<"));
   assert.match(html, /aria-label="Today&#x27;s reading goal"[^>]*aria-valuenow="50"/);
   assert.match(html, /Finish book/);
   assert.doesNotMatch(render(h(ReaderToolbar, { title: book.title, session: fakeSession(), isFinished: false, onMarkFinished() {} })), /reading goal/);
-  const progress = render(h(ReaderProgress, { percent: 140, label: "Page 3 of 3" }));
-  assert.match(progress, /aria-valuenow="100"/);
-  assert.match(progress, /Page 3 of 3/);
+  const line = render(h(ReaderScrubber, { percent: 140, position: "Page 3 of 3", markers: [{ label: "Ch. 2", percent: 50 }] }));
+  assert.match(line, /role="slider"[^>]*aria-valuenow="100"/);
+  assert.match(line, /Page 3 of 3/);
+  assert.match(line, /title="Ch. 2"[^>]*left:50%/);
+  assert.match(line, /tabindex="-1"/);
+  assert.match(render(h(ReaderScrubber, { percent: 10, position: "x", onSeek() {} })), /tabindex="0"/);
 });
 
 test("preferences fall back to defaults for missing or invalid values and keep valid ones", () => {

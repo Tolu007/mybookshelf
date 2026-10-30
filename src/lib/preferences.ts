@@ -32,6 +32,16 @@ export const READER_FONTS = {
 
 export type ReaderFont = keyof typeof READER_FONTS;
 
+// The same faces as CSS variables from next/font, for previews in the app
+// itself. Newsreader and Jakarta are app-wide; pages that preview Garamond
+// and Literata add their variables (lib/reader-fonts.ts).
+export const READER_FONT_VARS: Record<ReaderFont, string> = {
+  newsreader: "var(--font-newsreader)",
+  garamond: "var(--font-garamond)",
+  literata: "var(--font-literata)",
+  jakarta: "var(--font-jakarta)",
+};
+
 export const LINE_HEIGHTS = [
   { value: 1.4, label: "Compact" },
   { value: 1.65, label: "Classic" },
