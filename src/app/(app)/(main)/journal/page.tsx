@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LibraryBig } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { JournalList } from "@/components/journal/journal-list";
-import { inTab, matchesQuery, parseTab, tabCounts, type JournalEntry } from "@/lib/journal";
+import { inTab, matchesQuery, paginate, parseTab, tabCounts, type JournalEntry } from "@/lib/journal";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import { JournalComposer } from "@/components/journal/journal-composer";
 import { PageHeader } from "@/components/page-header";
@@ -22,7 +22,7 @@ const INDEXED_VOLUMES = 6;
 export default async function JournalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tab?: string }>;
+  searchParams: Promise<{ q?: string; tab?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
@@ -74,7 +74,7 @@ export default async function JournalPage({
   // Search applies before tab counts, so each tab shows how many match.
   const matching = entries.filter((entry) => matchesQuery(entry, query));
   const counts = tabCounts(matching);
-  const shown = matching.filter((entry) => inTab(entry, tab));
+  const { items: shown, pagination } = paginate(matching.filter((entry) => inTab(entry, tab)), params.page);
 
   const indexed = (allBooks ?? [])
     .filter((book) => entryCounts.has(book.id))
@@ -121,7 +121,7 @@ export default async function JournalPage({
           </section>
         </aside>
 
-        <JournalList entries={shown} counts={counts} tab={tab} query={query} />
+        <JournalList entries={shown} counts={counts} tab={tab} query={query} pagination={pagination} />
       </div>
     </div>
   );

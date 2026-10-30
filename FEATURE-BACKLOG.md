@@ -23,7 +23,7 @@ Suggested order: cheapest and most visible first.
 - [x] **Indexed volumes sidebar.** Books ranked by number of journal entries.
 - [ ] **Journal cadence chart.** Entries per day this month.
 - [ ] **Export journal.** Download all entries as Markdown.
-- [ ] **Pagination.** "Previous / Next" once the journal gets long.
+- [x] **Pagination.** 20 entries a page, keeping the search and tab.
 - [ ] **Images on entries.** Optional photo per entry (lowest priority).
 
 ## Reader

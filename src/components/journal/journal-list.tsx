@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowUpRight, BookOpen, Clock3, Feather, Highlighter, NotebookPen, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Clock3, Feather, Highlighter, NotebookPen, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JOURNAL_TABS, journalHref, splitOnMatches, type JournalEntry, type JournalTab } from "@/lib/journal";
+import { JOURNAL_TABS, journalHref, splitOnMatches, type JournalEntry, type JournalPage, type JournalTab } from "@/lib/journal";
 import { cn } from "@/lib/utils";
 
 export type { JournalEntry } from "@/lib/journal";
@@ -43,11 +43,12 @@ function EntryLabel({ entry }: { entry: JournalEntry }) {
 }
 
 // The server filters by tab and search; this renders the result.
-export function JournalList({ entries, counts, tab, query }: {
+export function JournalList({ entries, counts, tab, query, pagination }: {
   entries: JournalEntry[];
   counts: Record<JournalTab, number>;
   tab: JournalTab;
   query: string;
+  pagination: JournalPage;
 }) {
   const router = useRouter();
   // Derive from refreshed server props instead of keeping a stale copy of the list.
@@ -168,6 +169,35 @@ export function JournalList({ entries, counts, tab, query }: {
             );
           })}
         </div>
+      )}
+
+      {pagination.pages > 1 && (
+        <nav aria-label="Journal pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <p className="meta">
+            Showing {pagination.from}–{pagination.to} of {pagination.total} {pagination.total === 1 ? "entry" : "entries"}
+          </p>
+          <div className="flex items-center gap-2">
+            {pagination.page > 1 ? (
+              <Link href={journalHref({ q: query, tab, page: pagination.page - 1 })} rel="prev" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold transition-colors hover:bg-secondary">
+                <ArrowLeft className="size-3.5" aria-hidden="true" /> Previous
+              </Link>
+            ) : (
+              <span aria-disabled="true" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground/60">
+                <ArrowLeft className="size-3.5" aria-hidden="true" /> Previous
+              </span>
+            )}
+            <span className="meta px-1" aria-current="page">Page {pagination.page} of {pagination.pages}</span>
+            {pagination.page < pagination.pages ? (
+              <Link href={journalHref({ q: query, tab, page: pagination.page + 1 })} rel="next" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-semibold transition-colors hover:bg-secondary">
+                Next <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            ) : (
+              <span aria-disabled="true" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground/60">
+                Next <ArrowRight className="size-3.5" aria-hidden="true" />
+              </span>
+            )}
+          </div>
+        </nav>
       )}
     </div>
   );

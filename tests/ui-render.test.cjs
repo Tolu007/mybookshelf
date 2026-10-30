@@ -67,6 +67,7 @@ function render(element, pathname = "/", query = "") {
 const h = React.createElement;
 const book = { id: "book-1", title: "A thoughtful book", author: "A Reader", cover_url: null, format: "epub", want_to_read: false, is_favorite: false, category_id: null };
 const note = { id: "note-1", kind: "note", note: "An idea worth keeping.", excerpt: null, location: "epubcfi(/6/2[chapter]!/4/1:0)", createdAt: "2026-10-11T12:00:00Z", book: { id: book.id, title: book.title, format: "epub" } };
+const onePage = { page: 1, pages: 1, total: 1, from: 1, to: 1 };
 const fakeSession = (overrides) => ({ elapsedSeconds: 0, state: "running", reason: null, savedSeconds: 0, lastSessionSeconds: null, pause() {}, resume() {}, stop() {}, start() {}, ...overrides });
 const shelfBook = (overrides) => ({ ...book, finished_at: null, added_at: "2026-01-01T00:00:00Z", percent: null, last_read_at: null, ...overrides });
 
@@ -168,10 +169,10 @@ test("sidebar links every section, marks the active one, and labels the collapse
 
 test("journal handles empty entries, standalone reflections, highlights, and exact locations", () => {
   const counts = { all: 3, in_book: 1, standalone: 1, highlights: 1 };
-  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "" })), /Good thoughts deserve a place/);
+  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "", pagination: onePage })), /Good thoughts deserve a place/);
   const standalone = { ...note, id: "note-2", note: "A thought of my own.", book: null, location: null };
   const highlight = { ...note, id: "hl-1", kind: "highlight", note: null, excerpt: "A passage worth keeping." };
-  const html = render(h(JournalList, { entries: [note, standalone, highlight], counts, tab: "all", query: "" }));
+  const html = render(h(JournalList, { entries: [note, standalone, highlight], counts, tab: "all", query: "", pagination: onePage }));
   assert.match(html, /An idea worth keeping/);
   assert.match(html, /href="\/read\/book-1\?location=epubcfi/);
   assert.match(html, /aria-label="Delete note from A thoughtful book"/);
@@ -196,13 +197,13 @@ test("journal search matches notes, passages and titles, marks matches, and keep
   assert.deepEqual(journal.tabCounts([note, standalone]), { all: 2, in_book: 1, standalone: 1, highlights: 0 });
   assert.equal(journal.journalHref({ q: " stoic ", tab: "standalone" }), "/journal?q=stoic&tab=standalone");
   assert.equal(journal.journalHref({ tab: "all" }), "/journal");
-  const html = render(h(JournalList, { entries: [standalone], counts: { all: 1, in_book: 0, standalone: 1, highlights: 0 }, tab: "standalone", query: "calm" }));
+  const html = render(h(JournalList, { entries: [standalone], counts: { all: 1, in_book: 0, standalone: 1, highlights: 0 }, tab: "standalone", query: "calm", pagination: onePage }));
   assert.match(html, /<mark[^>]*>calm<\/mark>/);
   assert.match(html, /1 entry matches/);
   assert.match(html, /name="tab" value="standalone"/);
   assert.match(html, /href="\/journal\?tab=standalone"[^>]*>.*Clear search/s);
   assert.match(html, /href="\/journal\?q=calm&amp;tab=highlights"/);
-  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "zzz" })), /Nothing matches that search/);
+  assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "zzz", pagination: onePage })), /Nothing matches that search/);
 });
 
 test("journal composer writes standalone entries and links books only when there are some", () => {
@@ -383,6 +384,24 @@ test("finished-books table lists books with date, time and sessions, or an empty
   assert.match(html, />14</);
   assert.match(html, /Fiction/);
   assert.match(render(h(FinishedBooksTable, { periodName: "2024", books: [] })), /No books finished in 2024 yet/);
+});
+
+test("journal pages clamp to what exists and keep search and tab in page links", () => {
+  const items = Array.from({ length: 45 }, (_, index) => index);
+  assert.deepEqual(journal.paginate(items, "2").pagination, { page: 2, pages: 3, total: 45, from: 21, to: 40 });
+  assert.equal(journal.paginate(items, "2").items[0], 20);
+  assert.equal(journal.paginate(items, "99").pagination.page, 3);
+  assert.equal(journal.paginate(items, "abc").pagination.page, 1);
+  assert.deepEqual(journal.paginate([], undefined).pagination, { page: 1, pages: 1, total: 0, from: 0, to: 0 });
+  assert.equal(journal.journalHref({ q: "calm", tab: "highlights", page: 3 }), "/journal?q=calm&tab=highlights&page=3");
+  assert.equal(journal.journalHref({ page: 1 }), "/journal");
+  const html = render(h(JournalList, { entries: [note], counts: { all: 45, in_book: 45, standalone: 0, highlights: 0 }, tab: "in_book", query: "idea", pagination: { page: 2, pages: 3, total: 45, from: 21, to: 40 } }));
+  assert.match(html, /Showing 21–40 of 45 entries/);
+  const pageLink = (rel) => (html.match(/<a\b[^>]*>/g) ?? []).find((tag) => tag.includes(`rel="${rel}"`));
+  assert.match(pageLink("prev"), /href="\/journal\?q=idea&amp;tab=in_book"/);
+  assert.match(pageLink("next"), /href="\/journal\?q=idea&amp;tab=in_book&amp;page=3"/);
+  assert.match(html, /Page 2 of 3/);
+  assert.doesNotMatch(render(h(JournalList, { entries: [note], counts: { all: 1, in_book: 1, standalone: 0, highlights: 0 }, tab: "all", query: "", pagination: onePage })), /Journal pages/);
 });
 
 test("long result sets are fetched page by page until a short page", async () => {

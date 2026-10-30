@@ -1,5 +1,7 @@
-// Journal filtering: tabs, search and URLs. Shared by the journal page
+// Journal filtering: tabs, search, pages and URLs. Shared by the journal page
 // (which filters on the server) and the tests.
+
+export const JOURNAL_PAGE_SIZE = 20;
 
 export type JournalEntry = {
   id: string;
@@ -57,10 +59,26 @@ export function tabCounts(entries: JournalEntry[]) {
   return Object.fromEntries(JOURNAL_TABS.map((tab) => [tab.key, entries.filter((entry) => inTab(entry, tab.key)).length])) as Record<JournalTab, number>;
 }
 
-export function journalHref({ q, tab }: { q?: string; tab?: JournalTab }) {
+export type JournalPage = { page: number; pages: number; total: number; from: number; to: number };
+
+// The requested page of entries, clamped to the pages that exist.
+export function paginate<T>(items: T[], requested: string | number | undefined, pageSize = JOURNAL_PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  const asked = Math.floor(Number(requested));
+  const page = Number.isFinite(asked) ? Math.min(pages, Math.max(1, asked)) : 1;
+  const start = (page - 1) * pageSize;
+  const slice = items.slice(start, start + pageSize);
+  return {
+    items: slice,
+    pagination: { page, pages, total: items.length, from: slice.length ? start + 1 : 0, to: start + slice.length } satisfies JournalPage,
+  };
+}
+
+export function journalHref({ q, tab, page }: { q?: string; tab?: JournalTab; page?: number }) {
   const search = new URLSearchParams();
   if (q?.trim()) search.set("q", q.trim());
   if (tab && tab !== "all") search.set("tab", tab);
+  if (page && page > 1) search.set("page", String(page));
   const query = search.toString();
   return query ? `/journal?${query}` : "/journal";
 }
