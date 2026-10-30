@@ -27,7 +27,7 @@ Suggested order: cheapest and most visible first.
 
 ## Reader
 
-- [ ] **Focus timer controls.** Visible session timer with pause/stop in the reader bar (sessions are already timed in the background).
+- [x] **Focus timer controls.** Pause, resume, stop-and-save and start a new session from the reader bar.
 - [x] **Daily reading goal.** Set in Settings; shown in the reader bar and on Stats.
 - [ ] **Highlight colours.** 4 colours (sage, amber, crimson, slate) in the selection popup, optionally with meanings set in Settings.
 - [ ] **Copy / Define** in the selection popup.

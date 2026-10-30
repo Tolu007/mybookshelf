@@ -77,7 +77,7 @@ export function EpubReader({
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [position, setPosition] = useState<{ percent: number; chapterPage: number | null; chapterPages: number | null }>({ percent: 0, chapterPage: null, chapterPages: null });
-  const { elapsedSeconds } = useReadingSession(bookId);
+  const session = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
@@ -291,7 +291,7 @@ export function EpubReader({
       <ReaderToolbar
         title={title}
         format="epub"
-        elapsedSeconds={elapsedSeconds}
+        session={session}
         isFinished={isFinished}
         onMarkFinished={markFinished}
         dailyGoalMinutes={dailyGoalMinutes}

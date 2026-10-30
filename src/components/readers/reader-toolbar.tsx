@@ -4,18 +4,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeft, Check, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-function clock(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
-}
+import { SessionTimer } from "@/components/readers/session-timer";
+import type { ReadingSession } from "@/hooks/use-reading-session";
 
 export function ReaderToolbar({
   title,
   format,
-  elapsedSeconds,
+  session,
   isFinished,
   onMarkFinished,
   dailyGoalMinutes = null,
@@ -24,17 +19,16 @@ export function ReaderToolbar({
 }: {
   title: string;
   format?: string;
-  elapsedSeconds: number;
+  session: ReadingSession;
   isFinished: boolean;
   onMarkFinished: () => void;
   // Today's goal from Settings, and what was already read today before
-  // this session started.
+  // the reader opened.
   dailyGoalMinutes?: number | null;
   minutesBeforeSession?: number;
   children?: ReactNode;
 }) {
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const todayMinutes = Math.floor(minutesBeforeSession + elapsedSeconds / 60);
+  const todayMinutes = Math.floor(minutesBeforeSession + (session.savedSeconds + session.elapsedSeconds) / 60);
   const goalPercent = dailyGoalMinutes ? Math.min(100, (todayMinutes / dailyGoalMinutes) * 100) : 0;
 
   return (
@@ -51,12 +45,7 @@ export function ReaderToolbar({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 dark:bg-secondary">
-            <span className="size-1.5 animate-pulse rounded-full bg-ribbon motion-reduce:animate-none" aria-hidden="true" />
-            <span className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">In focus</span>
-            <time className="font-mono text-xs font-semibold tabular-nums" aria-hidden="true">{clock(elapsedSeconds)}</time>
-            <span className="sr-only">{minutes}m this session</span>
-          </div>
+          <SessionTimer session={session} />
 
           {dailyGoalMinutes && (
             <div className="hidden items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 md:flex dark:bg-secondary" title="Today's reading goal">

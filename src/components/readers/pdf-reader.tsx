@@ -55,7 +55,7 @@ export function PdfReader({
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const { elapsedSeconds } = useReadingSession(bookId);
+  const session = useReadingSession(bookId);
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
@@ -349,7 +349,7 @@ export function PdfReader({
       <ReaderToolbar
         title={title}
         format="pdf"
-        elapsedSeconds={elapsedSeconds}
+        session={session}
         isFinished={isFinished}
         onMarkFinished={markFinished}
         dailyGoalMinutes={dailyGoalMinutes}

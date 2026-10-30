@@ -46,6 +46,7 @@ const { downloadBook, readerErrorMessage, readerErrorState } = require("../src/l
 const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-file-errors.ts");
 const LoginPage = require("../src/app/login/page.tsx").default;
 const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
+const { SessionTimer } = require("../src/components/readers/session-timer.tsx");
 const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
 const preferences = require("../src/lib/preferences.ts");
 const statsAggregate = require("../src/lib/stats-aggregate.ts");
@@ -60,6 +61,7 @@ function render(element, pathname = "/", query = "") {
 const h = React.createElement;
 const book = { id: "book-1", title: "A thoughtful book", author: "A Reader", cover_url: null, format: "epub", want_to_read: false, is_favorite: false, category_id: null };
 const note = { id: "note-1", kind: "note", note: "An idea worth keeping.", excerpt: null, location: "epubcfi(/6/2[chapter]!/4/1:0)", createdAt: "2026-10-11T12:00:00Z", book: { id: book.id, title: book.title, format: "epub" } };
+const fakeSession = (overrides) => ({ elapsedSeconds: 0, state: "running", reason: null, savedSeconds: 0, lastSessionSeconds: null, pause() {}, resume() {}, stop() {}, start() {}, ...overrides });
 const shelfBook = (overrides) => ({ ...book, finished_at: null, added_at: "2026-01-01T00:00:00Z", percent: null, last_read_at: null, ...overrides });
 
 test("book controls stay outside reading links and all links target the book", () => {
@@ -183,7 +185,7 @@ test("journal composer writes standalone entries and links books only when there
 });
 
 test("reader toolbar retains back navigation, reading controls, and finished state", () => {
-  const html = render(h(ReaderToolbar, { title: book.title, elapsedSeconds: 120, isFinished: true, onMarkFinished() {} }, h("button", { "aria-label": "Next page" }, "Next")));
+  const html = render(h(ReaderToolbar, { title: book.title, session: fakeSession({ elapsedSeconds: 120 }), isFinished: true, onMarkFinished() {} }, h("button", { "aria-label": "Next page" }, "Next")));
   assert.match(html, /aria-label="Back to your library"/);
   assert.match(html, /aria-label="Reading controls"/);
   assert.match(html, /2m this session/);
@@ -191,13 +193,29 @@ test("reader toolbar retains back navigation, reading controls, and finished sta
   assert.match(html, /Finished/);
 });
 
-test("reader toolbar shows today's goal including the current session, and a book progress ribbon", () => {
-  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", elapsedSeconds: 600, isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 10 }));
+test("session timer offers pause and stop while reading, resume when paused, and a new session once stopped", () => {
+  const running = render(h(SessionTimer, { session: fakeSession({ elapsedSeconds: 65 }) }));
+  assert.match(running, /In focus/);
+  assert.match(running, /00:01:05/);
+  assert.match(running, /aria-label="Pause session"/);
+  assert.match(running, /aria-label="Stop and save session"/);
+  const paused = render(h(SessionTimer, { session: fakeSession({ state: "paused", reason: "manual" }) }));
+  assert.match(paused, /Paused/);
+  assert.match(paused, /aria-label="Resume session"/);
+  assert.doesNotMatch(paused, /Pause session/);
+  const stopped = render(h(SessionTimer, { session: fakeSession({ state: "stopped", lastSessionSeconds: 754 }) }));
+  assert.match(stopped, /Session saved · 13m/);
+  assert.match(stopped, /New session/);
+  assert.match(render(h(SessionTimer, { session: fakeSession({ state: "stopped", lastSessionSeconds: 0 }) })), /too short to save/);
+});
+
+test("reader toolbar shows today's goal including the current and stopped sessions, and a book progress ribbon", () => {
+  const html = render(h(ReaderToolbar, { title: book.title, format: "pdf", session: fakeSession({ elapsedSeconds: 600, savedSeconds: 300 }), isFinished: false, onMarkFinished() {}, dailyGoalMinutes: 40, minutesBeforeSession: 5 }));
   assert.match(html, /00:10:00/);
   assert.match(html, /20\/40m/);
   assert.match(html, /aria-label="Today&#x27;s reading goal"[^>]*aria-valuenow="50"/);
   assert.match(html, /Finish book/);
-  assert.doesNotMatch(render(h(ReaderToolbar, { title: book.title, elapsedSeconds: 0, isFinished: false, onMarkFinished() {} })), /reading goal/);
+  assert.doesNotMatch(render(h(ReaderToolbar, { title: book.title, session: fakeSession(), isFinished: false, onMarkFinished() {} })), /reading goal/);
   const progress = render(h(ReaderProgress, { percent: 140, label: "Page 3 of 3" }));
   assert.match(progress, /aria-valuenow="100"/);
   assert.match(progress, /Page 3 of 3/);
