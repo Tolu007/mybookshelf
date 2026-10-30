@@ -1,4 +1,5 @@
-// Reading typography and goals, saved per user in user_preferences.
+// Reading typography, goals and timer behaviour, saved per user in
+// user_preferences.
 // Everything read from the database goes through parsePreferences, so a
 // missing row, an old shape or a bad value all fall back to defaults.
 
@@ -57,6 +58,9 @@ export type Paper = keyof typeof PAPERS;
 
 export const FONT_SIZE_RANGE = { min: 14, max: 28 } as const;
 
+// Minutes without a page turn before the session clock pauses itself.
+export const AUTO_PAUSE_OPTIONS = [3, 5, 10] as const;
+
 export type Preferences = {
   reader: {
     font: ReaderFont;
@@ -71,11 +75,16 @@ export type Preferences = {
     dailyMinutes: number | null;
     yearlyBooks: number | null;
   };
+  timer: {
+    // null means off.
+    autoPauseMinutes: number | null;
+  };
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
   reader: { font: "newsreader", fontSize: 18, lineHeight: 1.65, measure: 72, paper: "auto", justify: false },
   goals: { dailyMinutes: null, yearlyBooks: null },
+  timer: { autoPauseMinutes: null },
 };
 
 function pick<T>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -91,6 +100,7 @@ export function parsePreferences(raw: unknown): Preferences {
   const source = (raw && typeof raw === "object" ? raw : {}) as Record<string, Record<string, unknown> | undefined>;
   const reader = source.reader ?? {};
   const goals = source.goals ?? {};
+  const timer = source.timer ?? {};
   const defaults = DEFAULT_PREFERENCES.reader;
   return {
     reader: {
@@ -104,6 +114,9 @@ export function parsePreferences(raw: unknown): Preferences {
     goals: {
       dailyMinutes: wholeNumber(goals.dailyMinutes, 5, 600),
       yearlyBooks: wholeNumber(goals.yearlyBooks, 1, 500),
+    },
+    timer: {
+      autoPauseMinutes: pick<number | null>(timer.autoPauseMinutes, AUTO_PAUSE_OPTIONS, null),
     },
   };
 }

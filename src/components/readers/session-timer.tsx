@@ -14,6 +14,7 @@ export function clock(totalSeconds: number) {
 
 const PAUSE_LABEL: Record<NonNullable<ReadingSession["reason"]>, string> = {
   manual: "Paused",
+  idle: "Paused · idle",
 };
 
 // The session clock in the reader bar, with pause/resume and stop.

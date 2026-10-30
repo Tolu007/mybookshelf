@@ -49,7 +49,7 @@ Suggested order: cheapest and most visible first.
 
 ## Settings (beyond the first version)
 
-- [ ] **Automatic session pause** after N minutes without a page turn.
+- [x] **Automatic session pause** after 3, 5 or 10 minutes without a page turn (Settings → Timer & focus).
 - [ ] **Interval chimes** (sound at 15/30/45 minutes).
 - [ ] **Pomodoro focus cycles.**
 - [ ] **Full library export.** Notes, metadata and reading logs as Markdown, JSON or PDF.

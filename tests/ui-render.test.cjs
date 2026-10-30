@@ -207,6 +207,10 @@ test("session timer offers pause and stop while reading, resume when paused, and
   assert.match(stopped, /Session saved · 13m/);
   assert.match(stopped, /New session/);
   assert.match(render(h(SessionTimer, { session: fakeSession({ state: "stopped", lastSessionSeconds: 0 }) })), /too short to save/);
+  assert.match(render(h(SessionTimer, { session: fakeSession({ state: "paused", reason: "idle" }) })), /Paused · idle/);
+  assert.equal(preferences.parsePreferences({ timer: { autoPauseMinutes: 5 } }).timer.autoPauseMinutes, 5);
+  assert.equal(preferences.parsePreferences({ timer: { autoPauseMinutes: 7 } }).timer.autoPauseMinutes, null);
+  assert.match(render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: null })), /aria-label="Automatic pause"/);
 });
 
 test("reader toolbar shows today's goal including the current and stopped sessions, and a book progress ribbon", () => {

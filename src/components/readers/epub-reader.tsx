@@ -52,6 +52,7 @@ export function EpubReader({
   isFinished: initialIsFinished,
   dailyGoalMinutes,
   minutesBeforeSession,
+  timer,
   typography,
 }: {
   bookId: string;
@@ -60,6 +61,7 @@ export function EpubReader({
   isFinished: boolean;
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
+  timer: Preferences["timer"];
   typography: Typography;
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -77,12 +79,19 @@ export function EpubReader({
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [position, setPosition] = useState<{ percent: number; chapterPage: number | null; chapterPages: number | null }>({ percent: 0, chapterPage: null, chapterPages: null });
-  const session = useReadingSession(bookId);
+  const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
+  const { markActivity } = session;
+  // Page turns happen inside epub.js callbacks set up once per book.
+  const markActivityRef = useRef(markActivity);
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
     highlightModeRef.current = highlightMode;
   }, [highlightMode]);
+
+  useEffect(() => {
+    markActivityRef.current = markActivity;
+  }, [markActivity]);
 
   useEffect(() => {
     if (!viewerRef.current) return;
@@ -162,6 +171,7 @@ export function EpubReader({
       "relocated",
       (location: { start: { cfi: string; percentage: number; displayed?: { page: number; total: number } } }) => {
         currentCfiRef.current = location.start.cfi;
+        markActivityRef.current();
         const percent = Math.round(location.start.percentage * 10000) / 100;
         setPosition({
           percent,

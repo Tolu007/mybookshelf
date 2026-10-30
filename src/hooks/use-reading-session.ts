@@ -8,8 +8,9 @@ const MIN_SESSION_SECONDS = 30;
 
 export type SessionState = "running" | "paused" | "stopped";
 // Why a session is paused. Hiding the tab also stops the clock, but that
-// isn't a pause: it resumes by itself when you come back.
-export type PauseReason = "manual";
+// isn't a pause: it resumes by itself when you come back. "idle" pauses
+// resume on the next page turn.
+export type PauseReason = "manual" | "idle";
 
 export type ReadingSession = {
   elapsedSeconds: number;
@@ -23,14 +24,22 @@ export type ReadingSession = {
   resume: () => void;
   stop: () => void;
   start: () => void;
+  // Call on every page turn: keeps auto-pause from firing, and resumes an
+  // idle pause.
+  markActivity: () => void;
 };
 
-export function useReadingSession(bookId: string): ReadingSession {
+export function useReadingSession(
+  bookId: string,
+  { autoPauseMinutes = null }: { autoPauseMinutes?: number | null } = {}
+): ReadingSession {
   const accumulatedMsRef = useRef(0);
   const segmentStartRef = useRef<number | null>(null);
   const startedAtRef = useRef(new Date().toISOString());
   const reasonRef = useRef<PauseReason | null>(null);
   const stoppedRef = useRef(false);
+  const lastActivityRef = useRef(0);
+  const autoPauseMsRef = useRef(autoPauseMinutes ? autoPauseMinutes * 60_000 : null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [status, setStatus] = useState<{ state: SessionState; reason: PauseReason | null }>({ state: "running", reason: null });
   const [savedSeconds, setSavedSeconds] = useState(0);
@@ -53,6 +62,8 @@ export function useReadingSession(bookId: string): ReadingSession {
       document.visibilityState === "visible"
     ) {
       segmentStartRef.current = Date.now();
+      // Coming back to the page counts as activity for auto-pause.
+      lastActivityRef.current = Date.now();
     }
   }, []);
 
@@ -87,6 +98,7 @@ export function useReadingSession(bookId: string): ReadingSession {
   const resume = useCallback(() => {
     if (stoppedRef.current) return;
     reasonRef.current = null;
+    lastActivityRef.current = Date.now();
     run();
     setStatus({ state: "running", reason: null });
   }, [run]);
@@ -108,10 +120,20 @@ export function useReadingSession(bookId: string): ReadingSession {
     reasonRef.current = null;
     accumulatedMsRef.current = 0;
     startedAtRef.current = new Date().toISOString();
+    lastActivityRef.current = Date.now();
     run();
     setLastSessionSeconds(null);
     setStatus({ state: "running", reason: null });
   }, [run]);
+
+  const markActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (reasonRef.current === "idle") resume();
+  }, [resume]);
+
+  useEffect(() => {
+    autoPauseMsRef.current = autoPauseMinutes ? autoPauseMinutes * 60_000 : null;
+  }, [autoPauseMinutes]);
 
   useEffect(() => {
     // A fresh session per book (and per remount in development).
@@ -120,6 +142,7 @@ export function useReadingSession(bookId: string): ReadingSession {
     accumulatedMsRef.current = 0;
     segmentStartRef.current = null;
     startedAtRef.current = new Date().toISOString();
+    lastActivityRef.current = Date.now();
     run();
 
     function onVisibilityChange() {
@@ -146,7 +169,14 @@ export function useReadingSession(bookId: string): ReadingSession {
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", finalize);
 
-    const tick = setInterval(() => setElapsedSeconds(elapsedNow()), 1000);
+    const tick = setInterval(() => {
+      const idleLimit = autoPauseMsRef.current;
+      if (idleLimit && segmentStartRef.current !== null && Date.now() - lastActivityRef.current > idleLimit) {
+        pause("idle");
+        return;
+      }
+      setElapsedSeconds(elapsedNow());
+    }, 1000);
 
     return () => {
       window.removeEventListener("blur", onBlur);
@@ -156,7 +186,7 @@ export function useReadingSession(bookId: string): ReadingSession {
       clearInterval(tick);
       finalize();
     };
-  }, [bookId, halt, run, save, elapsedNow]);
+  }, [bookId, halt, run, save, elapsedNow, pause]);
 
   return {
     elapsedSeconds,
@@ -168,5 +198,6 @@ export function useReadingSession(bookId: string): ReadingSession {
     resume,
     stop,
     start,
+    markActivity,
   };
 }

@@ -2,10 +2,11 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
+import { Check, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
+  AUTO_PAUSE_OPTIONS,
   DEFAULT_PREFERENCES,
   FONT_SIZE_RANGE,
   LINE_HEIGHTS,
@@ -110,6 +111,7 @@ export function SettingsForm({ initial, profile }: {
   const reader = prefs.reader;
   const setReader = (patch: Partial<Preferences["reader"]>) => setPrefs((value) => ({ ...value, reader: { ...value.reader, ...patch } }));
   const setGoals = (patch: Partial<Preferences["goals"]>) => setPrefs((value) => ({ ...value, goals: { ...value.goals, ...patch } }));
+  const setTimer = (patch: Partial<Preferences["timer"]>) => setPrefs((value) => ({ ...value, timer: { ...value.timer, ...patch } }));
 
   async function save() {
     setSaving(true);
@@ -249,7 +251,20 @@ export function SettingsForm({ initial, profile }: {
             </p>
           </Section>
 
-          <Section id="goals" index="03" title="Reading goals" description="Targets shown in the reader and on your statistics. Set to Off to hide them.">
+          <Section id="timer" index="03" title="Timer & focus" description="How the session clock behaves while you read.">
+            <div className="rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <p className="flex items-center gap-2 text-sm font-semibold"><Hourglass className="size-4 text-sage" aria-hidden="true" /> Automatic pause</p>
+              <p className="mt-1 mb-3 text-xs text-muted-foreground">Pause the clock when you haven&apos;t turned a page for a while. The next page turn resumes it.</p>
+              <Segmented
+                label="Automatic pause"
+                value={prefs.timer.autoPauseMinutes ?? 0}
+                options={[{ value: 0, label: "Off" }, ...AUTO_PAUSE_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
+                onChange={(minutes) => setTimer({ autoPauseMinutes: minutes || null })}
+              />
+            </div>
+          </Section>
+
+          <Section id="goals" index="04" title="Reading goals" description="Targets shown in the reader and on your statistics. Set to Off to hide them.">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
                 <p className="flex items-center gap-2 text-sm font-semibold"><Target className="size-4 text-amber" aria-hidden="true" /> Daily reading target</p>

@@ -44,6 +44,7 @@ export default async function ReadPage({
     initialLocation: jumpToLocation ?? progress?.location ?? null,
     isFinished: Boolean(book.finished_at),
     dailyGoalMinutes: preferences.goals.dailyMinutes,
+    timer: preferences.timer,
     minutesBeforeSession: (todaySessions ?? []).reduce((sum, row) => sum + row.duration_seconds, 0) / 60,
   };
 

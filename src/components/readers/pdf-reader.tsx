@@ -13,6 +13,7 @@ import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
+import type { Preferences } from "@/lib/preferences";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -30,6 +31,7 @@ export function PdfReader({
   isFinished: initialIsFinished,
   dailyGoalMinutes,
   minutesBeforeSession,
+  timer,
 }: {
   bookId: string;
   title: string;
@@ -37,6 +39,7 @@ export function PdfReader({
   isFinished: boolean;
   dailyGoalMinutes: number | null;
   minutesBeforeSession: number;
+  timer: Preferences["timer"];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -55,7 +58,8 @@ export function PdfReader({
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const session = useReadingSession(bookId);
+  const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
+  const { markActivity } = session;
   const saveProgress = useProgressSync(bookId);
 
   useEffect(() => {
@@ -208,6 +212,11 @@ export function PdfReader({
     },
     [zoomLevel]
   );
+
+  // A page turn is reading activity (for auto-pause).
+  useEffect(() => {
+    markActivity();
+  }, [pageNumber, markActivity]);
 
   useEffect(() => {
     if (numPages === 0) return;
