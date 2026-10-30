@@ -2,11 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
+import { Bell, Check, Hourglass, Minus, Monitor, Moon, Plus, RotateCcw, Save, Sun, Target, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
   AUTO_PAUSE_OPTIONS,
+  CHIME_OPTIONS,
   DEFAULT_PREFERENCES,
   FONT_SIZE_RANGE,
   LINE_HEIGHTS,
@@ -18,6 +19,7 @@ import {
   type ReaderFont,
 } from "@/lib/preferences";
 import { applyThemeChoice, readThemeChoice, type ThemeChoice } from "@/lib/theme";
+import { playChime } from "@/lib/chime";
 import { cn } from "@/lib/utils";
 
 // CSS variables from next/font: Newsreader and Jakarta are app-wide; the
@@ -260,6 +262,21 @@ export function SettingsForm({ initial, profile }: {
                 value={prefs.timer.autoPauseMinutes ?? 0}
                 options={[{ value: 0, label: "Off" }, ...AUTO_PAUSE_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
                 onChange={(minutes) => setTimer({ autoPauseMinutes: minutes || null })}
+              />
+            </div>
+            <div className="rounded-lg border border-border bg-background p-4 dark:bg-secondary/50">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold"><Bell className="size-4 text-amber" aria-hidden="true" /> Interval chime</p>
+                  <p className="mt-1 mb-3 text-xs text-muted-foreground">A soft bell each time you&apos;ve read for this long. Paused time doesn&apos;t count.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => playChime()}>Preview</Button>
+              </div>
+              <Segmented
+                label="Interval chime"
+                value={prefs.timer.chimeMinutes ?? 0}
+                options={[{ value: 0, label: "Off" }, ...CHIME_OPTIONS.map((minutes) => ({ value: minutes, label: `${minutes} min` }))]}
+                onChange={(minutes) => setTimer({ chimeMinutes: minutes || null })}
               />
             </div>
           </Section>

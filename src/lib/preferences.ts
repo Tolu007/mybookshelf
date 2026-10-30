@@ -61,6 +61,9 @@ export const FONT_SIZE_RANGE = { min: 14, max: 28 } as const;
 // Minutes without a page turn before the session clock pauses itself.
 export const AUTO_PAUSE_OPTIONS = [3, 5, 10] as const;
 
+// Minutes of reading between chimes.
+export const CHIME_OPTIONS = [15, 30, 45, 60] as const;
+
 export type Preferences = {
   reader: {
     font: ReaderFont;
@@ -78,13 +81,14 @@ export type Preferences = {
   timer: {
     // null means off.
     autoPauseMinutes: number | null;
+    chimeMinutes: number | null;
   };
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
   reader: { font: "newsreader", fontSize: 18, lineHeight: 1.65, measure: 72, paper: "auto", justify: false },
   goals: { dailyMinutes: null, yearlyBooks: null },
-  timer: { autoPauseMinutes: null },
+  timer: { autoPauseMinutes: null, chimeMinutes: null },
 };
 
 function pick<T>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -117,6 +121,7 @@ export function parsePreferences(raw: unknown): Preferences {
     },
     timer: {
       autoPauseMinutes: pick<number | null>(timer.autoPauseMinutes, AUTO_PAUSE_OPTIONS, null),
+      chimeMinutes: pick<number | null>(timer.chimeMinutes, CHIME_OPTIONS, null),
     },
   };
 }

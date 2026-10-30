@@ -50,7 +50,7 @@ Suggested order: cheapest and most visible first.
 ## Settings (beyond the first version)
 
 - [x] **Automatic session pause** after 3, 5 or 10 minutes without a page turn (Settings → Timer & focus).
-- [ ] **Interval chimes** (sound at 15/30/45 minutes).
+- [x] **Interval chimes** every 15, 30, 45 or 60 minutes of reading, with a preview in Settings.
 - [ ] **Pomodoro focus cycles.**
 - [ ] **Full library export.** Notes, metadata and reading logs as Markdown, JSON or PDF.
 - [ ] **Storage usage.** Drive space used by Shelf.

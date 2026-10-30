@@ -10,6 +10,7 @@ import { AnnotationsPanel } from "@/components/readers/annotations-panel";
 import { AddNoteButton } from "@/components/readers/add-note-button";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
+import { useIntervalChime } from "@/hooks/use-interval-chime";
 import { useProgressSync } from "@/hooks/use-progress-sync";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
@@ -81,6 +82,7 @@ export function EpubReader({
   const [position, setPosition] = useState<{ percent: number; chapterPage: number | null; chapterPages: number | null }>({ percent: 0, chapterPage: null, chapterPages: null });
   const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
   const { markActivity } = session;
+  useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
   // Page turns happen inside epub.js callbacks set up once per book.
   const markActivityRef = useRef(markActivity);
   const saveProgress = useProgressSync(bookId);
