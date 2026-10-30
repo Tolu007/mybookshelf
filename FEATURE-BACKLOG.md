@@ -31,7 +31,7 @@ Suggested order: cheapest and most visible first.
 - [x] **Daily reading goal.** Set in Settings; shown in the reader bar and on Stats.
 - [ ] **Highlight colours.** 4 colours (sage, amber, crimson, slate) in the selection popup, optionally with meanings set in Settings.
 - [ ] **Copy / Define** in the selection popup.
-- [ ] **Session journal side panel.** Write notes and see this book's notes and highlights in a side panel instead of a dialog.
+- [x] **Session journal side panel.** Collapsible notes panel beside the page (slide-over on phones): write notes pinned to the current page, see and jump to this book's notes, highlights and bookmarks.
 - [ ] **Chapter progress.** Chapter markers on the bottom bar, "Chapter 4 of 12", and "~12 min left in chapter". (The bar itself and "page x of y in chapter" shipped.)
 - [ ] **Reading speed.** Words or pages per minute, shown in the reader and on Stats.
 - [ ] **Drop-cap chapter openings.**

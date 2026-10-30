@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Epub from "epubjs";
 import type { Rendition } from "epubjs";
 import { Highlighter, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReaderProgress, ReaderToolbar } from "@/components/readers/reader-toolbar";
-import { AnnotationsPanel } from "@/components/readers/annotations-panel";
-import { AddNoteButton } from "@/components/readers/add-note-button";
+import { NotesPanelToggle, ReaderNotesPanel, useNotesPanelState } from "@/components/readers/reader-notes-panel";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useIntervalChime } from "@/hooks/use-interval-chime";
@@ -88,6 +87,9 @@ export function EpubReader({
   // Page turns happen inside epub.js callbacks set up once per book.
   const markActivityRef = useRef(markActivity);
   const saveProgress = useProgressSync(bookId);
+  const [notesOpen, setNotesOpen] = useNotesPanelState();
+  const notesPanelId = useId();
+  const closeNotes = useCallback(() => setNotesOpen(false), [setNotesOpen]);
 
   useEffect(() => {
     highlightModeRef.current = highlightMode;
@@ -334,49 +336,55 @@ export function EpubReader({
           getCurrentLocation={() => currentCfiRef.current ?? ""}
           onSaved={() => setAnnotationsVersion((v) => v + 1)}
         />
-        <AddNoteButton
-          bookId={bookId}
-          getCurrentLocation={() => currentCfiRef.current ?? ""}
-          onSaved={() => setAnnotationsVersion((v) => v + 1)}
-        />
-        <AnnotationsPanel
-          bookId={bookId}
-          refreshKey={annotationsVersion}
-          onJumpTo={(location) => renditionRef.current?.display(location)}
-        />
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        <NotesPanelToggle open={notesOpen} onToggle={() => setNotesOpen(!notesOpen)} panelId={notesPanelId} />
       </ReaderToolbar>
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-hidden bg-secondary/60 sm:px-6 sm:py-6">
-        <ReaderLoadStatus state={loadState} onRetry={() => {
-          setLoadState(INITIAL_READER_LOAD);
-          setLoadAttempt((attempt) => attempt + 1);
-        }} />
-        <div
-          ref={frameRef}
-          className={cn(
-            "relative h-full w-full overflow-hidden sm:rounded-lg sm:border sm:border-border sm:shadow-[var(--shadow-card)]",
-            !paper.background && "bg-[#fdfbf7] dark:bg-[#121614]"
-          )}
-          style={{
-            maxWidth: columnWidthPx(typography.measure, fontSize) + PAGE_PADDING * 2,
-            ...(paper.background ? { background: paper.background } : {}),
-          }}
-        >
-          <button
-            type="button"
-            aria-label="Previous page"
-            className="absolute inset-y-0 left-0 z-10 w-12 cursor-w-resize"
-            onClick={() => renditionRef.current?.prev()}
-          />
-          <div className="h-full px-5 py-6 sm:px-12 sm:py-10">
-            <div ref={viewerRef} className="h-full" />
+      <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 min-w-0 flex-1 justify-center overflow-hidden bg-secondary/60 sm:px-6 sm:py-6">
+          <ReaderLoadStatus state={loadState} onRetry={() => {
+            setLoadState(INITIAL_READER_LOAD);
+            setLoadAttempt((attempt) => attempt + 1);
+          }} />
+          <div
+            ref={frameRef}
+            className={cn(
+              "relative h-full w-full overflow-hidden sm:rounded-lg sm:border sm:border-border sm:shadow-[var(--shadow-card)]",
+              !paper.background && "bg-[#fdfbf7] dark:bg-[#121614]"
+            )}
+            style={{
+              maxWidth: columnWidthPx(typography.measure, fontSize) + PAGE_PADDING * 2,
+              ...(paper.background ? { background: paper.background } : {}),
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Previous page"
+              className="absolute inset-y-0 left-0 z-10 w-12 cursor-w-resize"
+              onClick={() => renditionRef.current?.prev()}
+            />
+            <div className="h-full px-5 py-6 sm:px-12 sm:py-10">
+              <div ref={viewerRef} className="h-full" />
+            </div>
+            <button
+              type="button"
+              aria-label="Next page"
+              className="absolute inset-y-0 right-0 z-10 w-12 cursor-e-resize"
+              onClick={() => renditionRef.current?.next()}
+            />
           </div>
-          <button
-            type="button"
-            aria-label="Next page"
-            className="absolute inset-y-0 right-0 z-10 w-12 cursor-e-resize"
-            onClick={() => renditionRef.current?.next()}
-          />
         </div>
+        <ReaderNotesPanel
+          id={notesPanelId}
+          bookId={bookId}
+          open={notesOpen}
+          onClose={closeNotes}
+          getCurrentLocation={() => currentCfiRef.current ?? ""}
+          describeLocation={() => null}
+          onJumpTo={(location) => renditionRef.current?.display(location)}
+          refreshKey={annotationsVersion}
+          onSaved={() => setAnnotationsVersion((v) => v + 1)}
+          onActivity={markActivity}
+        />
       </div>
       <ReaderProgress percent={position.percent} label={progressLabel} />
     </div>

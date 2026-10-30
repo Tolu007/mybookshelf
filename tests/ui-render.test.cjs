@@ -47,6 +47,7 @@ const { classifyBookFileError, DriveAccessError } = require("../src/lib/book-fil
 const LoginPage = require("../src/app/login/page.tsx").default;
 const { ReaderProgress } = require("../src/components/readers/reader-toolbar.tsx");
 const { SessionTimer } = require("../src/components/readers/session-timer.tsx");
+const { ReaderNotesPanel, NotesPanelToggle } = require("../src/components/readers/reader-notes-panel.tsx");
 const { SettingsForm } = require("../src/components/settings/settings-form.tsx");
 const preferences = require("../src/lib/preferences.ts");
 const statsAggregate = require("../src/lib/stats-aggregate.ts");
@@ -225,6 +226,20 @@ test("session timer offers pause and stop while reading, resume when paused, and
   const withPomodoro = render(h(SettingsForm, { initial: { ...preferences.DEFAULT_PREFERENCES, timer: { ...preferences.DEFAULT_PREFERENCES.timer, pomodoro: true } }, profile: null }));
   assert.match(withPomodoro, /aria-label="Focus length"/);
   assert.doesNotMatch(render(h(SettingsForm, { initial: preferences.DEFAULT_PREFERENCES, profile: null })), /Focus length/);
+});
+
+test("notes panel writes notes pinned to the current page and closes to nothing", () => {
+  const props = { id: "notes", bookId: book.id, onClose() {}, getCurrentLocation: () => "12", describeLocation: (location) => `Page ${location}`, onJumpTo() {}, refreshKey: 0, onSaved() {} };
+  const open = render(h(ReaderNotesPanel, { ...props, open: true }));
+  assert.match(open, /aria-label="Session journal"/);
+  assert.match(open, /Write a note/);
+  assert.match(open, /Page 12/);
+  assert.match(open, /aria-label="Close notes panel"/);
+  assert.match(open, /disabled=""[^>]*>.*Save note/s);
+  assert.equal(render(h(ReaderNotesPanel, { ...props, open: false })), "");
+  const toggle = render(h(NotesPanelToggle, { open: false, onToggle() {}, panelId: "notes" }));
+  assert.match(toggle, /aria-expanded="false"/);
+  assert.match(toggle, /aria-controls="notes"/);
 });
 
 test("reader toolbar shows today's goal including the current and stopped sessions, and a book progress ribbon", () => {

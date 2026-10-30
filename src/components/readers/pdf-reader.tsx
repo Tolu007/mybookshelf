@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { ChevronLeft, ChevronRight, Highlighter, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReaderProgress, ReaderToolbar } from "@/components/readers/reader-toolbar";
-import { AnnotationsPanel } from "@/components/readers/annotations-panel";
-import { AddNoteButton } from "@/components/readers/add-note-button";
+import { NotesPanelToggle, ReaderNotesPanel, useNotesPanelState } from "@/components/readers/reader-notes-panel";
 import { BookmarkButton } from "@/components/readers/bookmark-button";
 import { useReadingSession } from "@/hooks/use-reading-session";
 import { useIntervalChime } from "@/hooks/use-interval-chime";
@@ -65,6 +64,9 @@ export function PdfReader({
   useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
   const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   const saveProgress = useProgressSync(bookId);
+  const [notesOpen, setNotesOpen] = useNotesPanelState();
+  const notesPanelId = useId();
+  const closeNotes = useCallback(() => setNotesOpen(false), [setNotesOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -427,45 +429,51 @@ export function PdfReader({
           getCurrentLocation={() => String(pageNumber)}
           onSaved={() => setAnnotationsVersion((v) => v + 1)}
         />
-        <AddNoteButton
-          bookId={bookId}
-          getCurrentLocation={() => String(pageNumber)}
-          onSaved={() => setAnnotationsVersion((v) => v + 1)}
-        />
-        <AnnotationsPanel
-          bookId={bookId}
-          refreshKey={annotationsVersion}
-          onJumpTo={(location) => goToPage(Number(location) || 1)}
-        />
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        <NotesPanelToggle open={notesOpen} onToggle={() => setNotesOpen(!notesOpen)} panelId={notesPanelId} />
       </ReaderToolbar>
-      <div
-        ref={containerRef}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-secondary/60 p-4"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        <ReaderLoadStatus state={loadState} onRetry={() => {
-          setLoadState(INITIAL_READER_LOAD);
-          setNumPages(0);
-          setLoadAttempt((attempt) => attempt + 1);
-        }} />
-        <div className="relative">
-          <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
-          <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
-          <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
-          <button
-            type="button"
-            aria-label="Previous page"
-            className="absolute inset-y-0 left-0 z-20 w-12 cursor-w-resize"
-            onClick={() => goToPage(pageNumber - 1)}
-          />
-          <button
-            type="button"
-            aria-label="Next page"
-            className="absolute inset-y-0 right-0 z-20 w-12 cursor-e-resize"
-            onClick={() => goToPage(pageNumber + 1)}
-          />
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={containerRef}
+          className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto bg-secondary/60 p-4"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          <ReaderLoadStatus state={loadState} onRetry={() => {
+            setLoadState(INITIAL_READER_LOAD);
+            setNumPages(0);
+            setLoadAttempt((attempt) => attempt + 1);
+          }} />
+          <div className="relative">
+            <canvas ref={canvasRef} className="rounded-sm shadow-[var(--shadow-lift)] ring-1 ring-border" />
+            <div ref={highlightLayerRef} className="pointer-events-none absolute top-0 left-0" />
+            <div ref={textLayerRef} className="pdf-text-layer absolute top-0 left-0" />
+            <button
+              type="button"
+              aria-label="Previous page"
+              className="absolute inset-y-0 left-0 z-20 w-12 cursor-w-resize"
+              onClick={() => goToPage(pageNumber - 1)}
+            />
+            <button
+              type="button"
+              aria-label="Next page"
+              className="absolute inset-y-0 right-0 z-20 w-12 cursor-e-resize"
+              onClick={() => goToPage(pageNumber + 1)}
+            />
+          </div>
         </div>
+        <ReaderNotesPanel
+          id={notesPanelId}
+          bookId={bookId}
+          open={notesOpen}
+          onClose={closeNotes}
+          getCurrentLocation={() => String(pageNumber)}
+          describeLocation={(location) => (/^d+$/.test(location) ? `Page ${location}` : null)}
+          onJumpTo={(location) => goToPage(Number(location) || 1)}
+          refreshKey={annotationsVersion}
+          onSaved={() => setAnnotationsVersion((v) => v + 1)}
+          onActivity={markActivity}
+        />
       </div>
       <ReaderProgress
         percent={numPages ? (pageNumber / numPages) * 100 : 0}
