@@ -41,6 +41,8 @@ const { JournalComposer } = require("../src/components/journal/journal-composer.
 const library = require("../src/lib/library.ts");
 const journal = require("../src/lib/journal.ts");
 const exportLib = require("../src/lib/export.ts");
+const bytes = require("../src/lib/bytes.ts");
+const { StorageBar, StorageUsage } = require("../src/components/settings/storage-usage.tsx");
 const { DataSection } = require("../src/components/settings/data-section.tsx");
 const { ReaderToolbar } = require("../src/components/readers/reader-toolbar.tsx");
 const { ReadingBarChart, YearlyBarChart } = require("../src/components/stats/reading-bar-chart.tsx");
@@ -436,6 +438,25 @@ test("library export reads as a journal and per-book notes, and links both forma
   const section = render(h(DataSection));
   assert.match(section, /href="\/api\/export\?format=markdown" download=""/);
   assert.match(section, /href="\/api\/export\?format=json" download=""/);
+});
+
+test("storage shows Shelf's share against the whole Drive, unlimited plans, and Shelf alone", () => {
+  assert.equal(bytes.formatBytes(500), "1 KB");
+  assert.equal(bytes.formatBytes(2.5 * 1024 * 1024), "2.5 MB");
+  assert.equal(bytes.formatBytes(1.42 * 1024 ** 3), "1.42 GB");
+  assert.equal(bytes.formatBytes(15 * 1024 ** 3), "15 GB");
+  assert.equal(bytes.formatBytes(150 * 1024 ** 3), "150 GB");
+  const gb = 1024 ** 3;
+  const full = render(h(StorageBar, { report: { shelfBytes: 1.5 * gb, bookCount: 12, drive: { usage: 6 * gb, limit: 15 * gb } } }));
+  assert.match(full, /1.5 GB/);
+  assert.match(full, /across 12 books/);
+  assert.match(full, /of 15 GB in your Drive \(6 GB used in total\)/);
+  assert.match(full, /width:10%/);
+  assert.match(full, /width:30%/);
+  assert.match(full, /Free: 9 GB/);
+  assert.match(render(h(StorageBar, { report: { shelfBytes: gb, bookCount: 1, drive: { usage: 2 * gb, limit: null } } })), /no storage limit/);
+  assert.match(render(h(StorageBar, { report: { shelfBytes: gb, bookCount: 1, drive: null } })), /Shelf&#x27;s share only/);
+  assert.match(render(h(StorageUsage)), /Checking storage/);
 });
 
 test("long result sets are fetched page by page until a short page", async () => {

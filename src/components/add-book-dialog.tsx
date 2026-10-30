@@ -19,6 +19,7 @@ import {
 import { extractClientCover } from "@/lib/extract-cover";
 import { detectBookFormat, type BookFormat } from "@/lib/book-format";
 import { cn } from "@/lib/utils";
+import { formatBytes } from "@/lib/bytes";
 
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MiB — a multiple of 256KiB per Drive's resumable protocol
 
@@ -64,11 +65,6 @@ async function uploadFileInChunks(
   }
 
   throw new Error("Upload did not complete.");
-}
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function AddBookDialog({
@@ -232,7 +228,7 @@ export function AddBookDialog({
               <span className="mt-1 flex max-w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-xs">
                 <FileText className="size-3.5 shrink-0 text-sage" aria-hidden="true" />
                 <span className="truncate font-medium">{selected.name}</span>
-                <span className="shrink-0 text-muted-foreground">({formatFileSize(selected.size)})</span>
+                <span className="shrink-0 text-muted-foreground">({formatBytes(selected.size)})</span>
                 {selected.format && <CheckCircle2 className="size-3.5 shrink-0 text-sage" aria-label="Supported file" />}
               </span>
             )}

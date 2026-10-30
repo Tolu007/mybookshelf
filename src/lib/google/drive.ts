@@ -104,3 +104,14 @@ export async function deleteBookFile(userId: string, driveFileId: string) {
   const drive = await getAuthorizedDrive(userId);
   await drive.files.delete({ fileId: driveFileId });
 }
+
+// Overall Drive usage and limit (the limit is absent on unlimited plans).
+// About.get works with the drive.file scope Shelf asks for.
+export async function getDriveStorageQuota(userId: string) {
+  const drive = await getAuthorizedDrive(userId);
+  const { data } = await drive.about.get({ fields: "storageQuota(limit,usage)" });
+  return {
+    usage: Number(data.storageQuota?.usage ?? 0),
+    limit: data.storageQuota?.limit ? Number(data.storageQuota.limit) : null,
+  };
+}

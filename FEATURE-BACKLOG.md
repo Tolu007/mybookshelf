@@ -54,7 +54,7 @@ Suggested order: cheapest and most visible first.
 - [x] **Interval chimes** every 15, 30, 45 or 60 minutes of reading, with a preview in Settings.
 - [x] **Pomodoro focus cycles.** Focus 15/25/45/50 min, break 5/10/15 min; breaks pause the session.
 - [x] **Full library export.** Markdown (journal + per-book highlights and notes) or full JSON, from Settings → Your data.
-- [ ] **Storage usage.** Drive space used by Shelf.
+- [x] **Storage usage.** Shelf's share of your Google Drive against its overall usage and limit (Settings → Your data).
 - [ ] **Metadata enrichment.** Look up book details (OpenLibrary) on upload.
 
 ## Not planned
