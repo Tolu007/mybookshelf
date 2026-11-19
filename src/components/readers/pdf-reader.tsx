@@ -17,7 +17,9 @@ import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { ReaderLoadStatus } from "@/components/readers/reader-load-status";
 import type { Preferences } from "@/lib/preferences";
-import { MIN_SAMPLE_WORDS, countWords, formatTimeLeft, wordsPerMinute } from "@/lib/reading-speed";
+import { countWords, currentWpm, formatTimeLeft, speedLabel } from "@/lib/reading-speed";
+import { highlightWash } from "@/lib/highlight-colors";
+import { HighlightColorPicker, useHighlightColor } from "@/components/readers/highlight-color-picker";
 import { chapterAt, tidyChapters, type ReaderChapter } from "@/lib/reader-chapters";
 
 const MIN_ZOOM = 0.5;
@@ -27,7 +29,7 @@ const CONTAINER_PADDING = 32; // matches the p-4 wrapper around the canvas
 const SWIPE_MIN_DISTANCE = 60;
 
 type Rect = { x: number; y: number; width: number; height: number };
-type HighlightAnnotation = { type: string; location: string; rects: Rect[] | null };
+type HighlightAnnotation = { type: string; location: string; rects: Rect[] | null; color?: string | null };
 type OutlineItem = { title: string; dest: string | unknown[] | null; items: OutlineItem[] };
 
 // PDF locations are page numbers.
@@ -91,6 +93,7 @@ export function PdfReader({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFinished, setIsFinished] = useState(initialIsFinished);
   const [highlightMode, setHighlightMode] = useState(false);
+  const pickedColor = useHighlightColor();
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -171,7 +174,7 @@ export function PdfReader({
         div.style.top = `${rect.y * height}px`;
         div.style.width = `${rect.width * width}px`;
         div.style.height = `${rect.height * height}px`;
-        div.style.background = "rgba(217, 119, 54, 0.35)";
+        div.style.background = highlightWash(highlight.color);
         div.style.borderRadius = "2px";
         layer.appendChild(div);
       }
@@ -346,6 +349,7 @@ export function PdfReader({
         location: String(pageNumber),
         excerpt: excerpt.slice(0, 500),
         rects,
+        color: pickedColor,
       }).then(() => setAnnotationsVersion((v) => v + 1));
     }
 
@@ -355,7 +359,7 @@ export function PdfReader({
       document.removeEventListener("mouseup", onSelectionEnd);
       document.removeEventListener("touchend", onSelectionEnd);
     };
-  }, [bookId, pageNumber, highlightMode]);
+  }, [bookId, pageNumber, highlightMode, pickedColor]);
 
   const goToPage = useCallback(
     (next: number) => {
@@ -407,10 +411,7 @@ export function PdfReader({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pageNumber, goToPage]);
 
-  const wpm =
-    session.speedSample.words >= MIN_SAMPLE_WORDS
-      ? wordsPerMinute(session.speedSample.words, session.speedSample.seconds)
-      : averageWpm;
+  const wpm = currentWpm(session.speedSample, averageWpm);
   const place = chapterAt(chapters, pageNumber);
   // Time left in this chapter when the PDF has an outline, else in the book.
   const lastPage = place ? (place.next ? place.next.start - 1 : numPages) : numPages;
@@ -455,6 +456,7 @@ export function PdfReader({
         >
           <Highlighter />
         </Button>
+        {highlightMode && <HighlightColorPicker value={pickedColor} />}
         <BookmarkButton
           bookId={bookId}
           getCurrentLocation={() => String(pageNumber)}
@@ -528,7 +530,7 @@ export function PdfReader({
         markers={chapters.flatMap((chapter) => (chapter.position !== null ? [{ label: chapter.label, percent: chapter.position * 100 }] : []))}
         onSeek={numPages ? (fraction) => goToPage(Math.min(numPages, Math.max(1, Math.round(fraction * numPages)))) : undefined}
         timeLeft={minutesLeft !== null ? `~${formatTimeLeft(minutesLeft)} left in ${place ? `chapter ${place.number}` : "book"}` : null}
-        speed={wpm ? `${wpm} wpm` : null}
+        speed={speedLabel(wpm)}
         chapter={place ? `${place.number} of ${place.count}` : null}
         position={numPages ? `Page ${pageNumber} of ${numPages}` : "Opening…"}
       />

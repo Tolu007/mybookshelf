@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveGroupId } from "@/lib/journal-groups";
+import { parseTags } from "@/lib/journal";
 
 // General-purpose journal notes: bookId and location are optional, so a note
 // can be written without being tied to any book.
@@ -22,6 +24,10 @@ export async function POST(request: Request) {
 
   const bookId = typeof body?.bookId === "string" && body.bookId ? body.bookId : null;
   const location = bookId && typeof body?.location === "string" && body.location ? body.location : null;
+  const groupId = await resolveGroupId(supabase, body?.groupId);
+  if (groupId === false) {
+    return NextResponse.json({ error: "That journal group doesn't exist." }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("annotations")
@@ -31,6 +37,8 @@ export async function POST(request: Request) {
       type: "note",
       location,
       note: note.slice(0, 2000),
+      group_id: groupId ?? null,
+      tags: parseTags(body?.tags) ?? [],
     })
     .select("id")
     .single();

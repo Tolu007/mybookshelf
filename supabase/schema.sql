@@ -215,3 +215,35 @@ alter table public.reading_sessions add column if not exists words_read integer
   check (words_read is null or words_read >= 0);
 alter table public.reading_sessions add column if not exists word_seconds integer
   check (word_seconds is null or word_seconds >= 0);
+
+-- Journal groups: named collections the user files entries into (e.g.
+-- "Dream log", "Stoicism"). An entry belongs to at most one group; deleting
+-- a group keeps its entries and just ungroups them.
+create table if not exists public.journal_groups (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 60),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists journal_groups_user_idx on public.journal_groups (user_id);
+
+alter table public.journal_groups enable row level security;
+
+drop policy if exists "own journal groups" on public.journal_groups;
+create policy "own journal groups" on public.journal_groups
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+alter table public.annotations
+  add column if not exists group_id uuid references public.journal_groups (id) on delete set null;
+-- Set when an entry's text is changed after it was written.
+alter table public.annotations add column if not exists edited_at timestamptz;
+
+create index if not exists annotations_group_idx on public.annotations (group_id);
+
+-- Highlight colour (null means the original amber) and free-form tags on
+-- journal entries and highlights, stored lowercase without the "#".
+alter table public.annotations add column if not exists color text
+  check (color is null or color in ('amber', 'sage', 'crimson', 'slate'));
+alter table public.annotations add column if not exists tags text[] not null default '{}';
+create index if not exists annotations_tags_idx on public.annotations using gin (tags);

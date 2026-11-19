@@ -38,6 +38,7 @@ const { LibraryFilters } = require("../src/components/library/library-filters.ts
 const { SidebarContent } = require("../src/components/shell/sidebar-content.tsx");
 const { JournalList } = require("../src/components/journal/journal-list.tsx");
 const { JournalComposer } = require("../src/components/journal/journal-composer.tsx");
+const { JournalGroups } = require("../src/components/journal/journal-groups.tsx");
 const library = require("../src/lib/library.ts");
 const journal = require("../src/lib/journal.ts");
 const exportLib = require("../src/lib/export.ts");
@@ -214,6 +215,33 @@ test("journal search matches notes, passages and titles, marks matches, and keep
   assert.match(render(h(JournalList, { entries: [], counts: { all: 0, in_book: 0, standalone: 0, highlights: 0 }, tab: "all", query: "zzz", pagination: onePage })), /Nothing matches that search/);
 });
 
+test("journal groups filter entries, keep the group in links, and entries can be edited", () => {
+  const group = { id: "g-1", name: "Dream log" };
+  const grouped = { ...note, id: "note-3", note: "Flying again.", book: null, group, editedAt: "2026-10-12T12:00:00Z" };
+  assert.equal(journal.inGroup(grouped, "g-1"), true);
+  assert.equal(journal.inGroup(note, "g-1"), false);
+  assert.equal(journal.inGroup(note, journal.UNGROUPED), true);
+  assert.equal(journal.inGroup(grouped, journal.UNGROUPED), false);
+  assert.equal(journal.inGroup(note, undefined), true);
+  assert.equal(journal.matchesQuery(grouped, "dream"), true);
+  assert.equal(journal.journalHref({ tab: "standalone", group: "g-1", page: 2 }), "/journal?tab=standalone&group=g-1&page=2");
+  const html = render(h(JournalList, { entries: [grouped, note], counts: { all: 2, in_book: 1, standalone: 1, highlights: 0 }, tab: "all", query: "", pagination: onePage, groups: [group], group: "g-1" }));
+  assert.match(html, /aria-label="Edit entry"/);
+  assert.match(html, /aria-label="Edit note from A thoughtful book"/);
+  assert.match(html, /Dream log/);
+  assert.match(html, /· edited/);
+  assert.match(html, /name="group" value="g-1"/);
+  assert.match(html, /href="\/journal\?tab=highlights&amp;group=g-1"/);
+  const sidebar = render(h(JournalGroups, { groups: [group], counts: { "g-1": 1, ungrouped: 1 }, total: 2, active: "g-1", query: "", tab: "all" }));
+  assert.match(sidebar, /aria-current="page"[^>]*href="\/journal\?group=g-1"/);
+  assert.match(sidebar, /href="\/journal\?group=ungrouped"/);
+  assert.match(sidebar, /aria-label="Rename Dream log"/);
+  assert.match(sidebar, /aria-label="Delete Dream log"/);
+  const composer = render(h(JournalComposer, { books: [], groups: [group], defaultGroupId: "g-1" }));
+  assert.match(composer, /<option value="g-1" selected="">Dream log<\/option>/);
+  assert.match(composer, /New group…/);
+});
+
 test("journal composer writes standalone entries and links books only when there are some", () => {
   const html = render(h(JournalComposer, { books: [] }));
   assert.match(html, /Writing desk/);
@@ -283,7 +311,7 @@ test("reading speed counts words, ignores flips and long stays, and formats time
   assert.equal(speed.formatTimeLeft(125), "2h 5m");
   const scrubber = render(h(ReaderScrubber, { percent: 40, timeLeft: "~12 min left in chapter 4", speed: "240 wpm", chapter: "4 of 12", position: "Page 4 of 10" }));
   assert.match(scrubber, /~12 min left in chapter 4/);
-  assert.match(scrubber, /Reading cadence: 240 wpm/);
+  assert.match(scrubber, /Reading cadence: <\/span>240 wpm/);
   assert.match(scrubber, /Chapter: <strong[^>]*>4 of 12/);
 });
 
@@ -499,6 +527,30 @@ test("library export reads as a journal and per-book notes, and links both forma
   assert.match(section, /href="\/api\/export\?format=json" download=""/);
 });
 
+test("library export files grouped entries under their group, marks edits, and keeps book notes under the book", () => {
+  const data = {
+    exported_at: "2026-10-30T09:00:00Z",
+    note: "",
+    books: [{ id: "b1", title: "Meditations", author: null, format: "epub", category: null, added_at: "2026-01-01T00:00:00Z", finished_at: null, want_to_read: false, is_favorite: false, progress_percent: null }],
+    annotations: [
+      { id: "a1", type: "note", book_id: null, location: null, excerpt: null, note: "Flying again.", created_at: "2026-02-03T10:00:00Z", edited_at: "2026-02-05T10:00:00Z", group_id: "g1" },
+      { id: "a2", type: "highlight", book_id: "b1", location: "x", excerpt: "The impediment to action advances action.", note: "Saw this in a dream.", created_at: "2026-02-04T10:00:00Z", group_id: "g1" },
+      { id: "a3", type: "note", book_id: null, location: null, excerpt: null, note: "Loose thought.", created_at: "2026-02-06T10:00:00Z", group_id: null },
+    ],
+    journal_groups: [{ id: "g1", name: "Dream log", created_at: "2026-02-01T00:00:00Z" }, { id: "g2", name: "Empty one", created_at: "2026-02-01T00:00:00Z" }],
+    reading_sessions: [],
+    stats: null,
+    preferences: null,
+  };
+  const md = exportLib.buildExportMarkdown(data);
+  assert.match(md, /## Journal\n\n### Feb 6, 2026\n\nLoose thought\./);
+  assert.doesNotMatch(md, /## Journal\n\n[^#]*Flying again/);
+  assert.match(md, /## Journal groups\n\n### Dream log\n\n#### Feb 3, 2026 \(edited Feb 5, 2026\)\n\nFlying again\.\n\n#### Feb 4, 2026 · Meditations\n\n> The impediment to action advances action\.\n\nSaw this in a dream\./);
+  assert.match(md, /### Empty one\n\nNo entries yet\./);
+  assert.match(md, /### Meditations[\s\S]*#### Highlights\n\n> The impediment/);
+  assert.doesNotMatch(md, /\n{3,}/);
+});
+
 test("storage shows Shelf's share against the whole Drive, unlimited plans, and Shelf alone", () => {
   assert.equal(bytes.formatBytes(500), "1 KB");
   assert.equal(bytes.formatBytes(2.5 * 1024 * 1024), "2.5 MB");
@@ -702,4 +754,152 @@ test("download failures are friendly, including interrupted streams and stalled 
     await assert.rejects(cancelled, { name: "AbortError" });
     assert.match(readerErrorMessage(new Error("secret parser details")), /damaged or unsupported/);
   } finally { global.fetch = originalFetch; }
+});
+
+const { StreakHeatmap } = require("../src/components/stats/streak-heatmap.tsx");
+const { ShelfBreakdown } = require("../src/components/stats/shelf-breakdown.tsx");
+const { TagInput } = require("../src/components/journal/tag-input.tsx");
+const { HighlightColorPicker } = require("../src/components/readers/highlight-color-picker.tsx");
+const highlightColors = require("../src/lib/highlight-colors.ts");
+const onThisDay = require("../src/lib/on-this-day.ts");
+
+test("tags are normalized, de-duplicated, counted and filter entries", () => {
+  assert.equal(journal.normalizeTag("  #Stoic Ethics "), "stoic-ethics");
+  assert.equal(journal.normalizeTag("##what?!"), "what");
+  assert.equal(journal.normalizeTag("#"), "");
+  assert.deepEqual(journal.parseTags(["Mindset", "#mindset", "", 4, "Dreams"]), ["mindset", "dreams"]);
+  assert.equal(journal.parseTags("mindset"), null);
+  assert.equal(journal.parseTags(Array.from({ length: 15 }, (_, i) => `t${i}`)).length, journal.MAX_TAGS);
+  const a = { ...note, id: "a", tags: ["stoic", "mornings"] };
+  const b = { ...note, id: "b", tags: ["stoic"] };
+  assert.deepEqual(journal.tagCounts([a, b, note]), [{ tag: "stoic", count: 2 }, { tag: "mornings", count: 1 }]);
+  assert.equal(journal.hasTag(a, "mornings"), true);
+  assert.equal(journal.hasTag(b, "mornings"), false);
+  assert.equal(journal.hasTag(note, undefined), true);
+  assert.equal(journal.matchesQuery(a, "#morn"), true);
+  assert.equal(journal.journalHref({ group: "g", tag: "stoic" }), "/journal?group=g&tag=stoic");
+  const html = render(h(JournalList, { entries: [a], counts: { all: 1, in_book: 1, standalone: 0, highlights: 0 }, tab: "all", query: "", pagination: onePage, tag: "stoic" }));
+  assert.match(html, /aria-current="page"[^>]*>#stoic</);
+  assert.match(html, /href="\/journal\?tag=mornings"/);
+  assert.match(html, /name="tag" value="stoic"/);
+  const input = render(h(TagInput, { tags: ["stoic"], onChange() {}, suggestions: ["stoic", "dreams"] }));
+  assert.match(input, /#stoic/);
+  assert.match(input, /aria-label="Remove tag stoic"/);
+  assert.match(input, /<option value="dreams">/);
+  assert.doesNotMatch(input, /<option value="stoic">/);
+});
+
+test("highlights keep their colour, old ones are amber, and the picker marks the choice", () => {
+  assert.equal(highlightColors.isHighlightColor("sage"), true);
+  assert.equal(highlightColors.isHighlightColor("pink"), false);
+  assert.equal(highlightColors.highlightColor(null).key, "amber");
+  assert.equal(highlightColors.highlightWash("amber"), "rgba(217, 119, 54, 0.35)");
+  const picker = render(h(HighlightColorPicker, { value: "crimson" }));
+  assert.equal((picker.match(/role="radio"/g) ?? []).length, 4);
+  assert.match(picker, /aria-checked="true" aria-label="Crimson highlight"/);
+  const hl = { ...note, id: "hl", kind: "highlight", note: null, excerpt: "A passage.", color: "slate" };
+  const html = render(h(JournalList, { entries: [hl], counts: { all: 1, in_book: 0, standalone: 0, highlights: 1 }, tab: "all", query: "", pagination: onePage }));
+  assert.match(html, /border-left-color:#5b7ba0/);
+});
+
+test("reading speed only samples pages actually read, then falls back to the average", () => {
+  const empty = { words: 0, seconds: 0 };
+  assert.deepEqual(speed.addPageToSample(empty, { words: 250, seconds: 60 }, true), { words: 250, seconds: 60 });
+  assert.equal(speed.addPageToSample(empty, { words: 250, seconds: 60 }, false), empty);
+  assert.equal(speed.addPageToSample(empty, { words: null, seconds: 60 }, true), empty);
+  assert.equal(speed.addPageToSample(empty, { words: 250, seconds: 1 }, true), empty);
+  assert.equal(speed.addPageToSample(empty, { words: 250, seconds: 20 * 60 }, true), empty);
+  // A run of normal page turns builds a usable sample.
+  let sample = empty;
+  for (let page = 0; page < 3; page++) sample = speed.addPageToSample(sample, { words: 250, seconds: 60 }, true);
+  assert.equal(speed.currentWpm(sample, 180), 250);
+  assert.equal(speed.currentWpm({ words: 100, seconds: 30 }, 180), 180);
+  assert.equal(speed.currentWpm({ words: 100, seconds: 30 }, null), null);
+  assert.equal(speed.speedLabel(250), "250 wpm");
+  assert.equal(speed.speedLabel(null), "measuring…");
+  const scrubber = render(h(ReaderScrubber, { percent: 10, speed: "measuring…", position: "Page 1 of 10" }));
+  assert.doesNotMatch(scrubber, /hidden font-mono/);
+  assert.match(scrubber, /measuring…/);
+});
+
+test("heatmap month labels scroll with the grid instead of on their own", () => {
+  const html = render(h(StreakHeatmap, { dailyMinutes: new Map([["2026-03-02", 40]]), year: 2026 }));
+  assert.match(html, /^<div class="w-max space-y-1">/);
+  assert.doesNotMatch(html, /overflow-x-auto/);
+});
+
+test("reading window splits sessions across hours and finds the best two hours", () => {
+  const at = (hour, minute = 0) => new Date(2026, 4, 10, hour, minute).toISOString();
+  const hours = statsAggregate.buildHourlyMinutes([
+    { started_at: at(21, 30), duration_seconds: 60 * 60 }, // 21:30-22:30
+    { started_at: at(22, 0), duration_seconds: 30 * 60 },
+    { started_at: at(7), duration_seconds: 20 * 60 },
+  ]);
+  assert.equal(Math.round(hours[21]), 30);
+  assert.equal(Math.round(hours[22]), 60);
+  assert.equal(Math.round(hours[7]), 20);
+  const best = statsAggregate.bestReadingWindow(hours);
+  assert.equal(best.start, 21);
+  assert.equal(best.end, 23);
+  assert.equal(Math.round(best.share * 100), 82);
+  assert.equal(statsAggregate.bestReadingWindow(Array(24).fill(0)), null);
+  // Wraps past midnight.
+  const late = Array(24).fill(0);
+  late[23] = 30;
+  late[0] = 30;
+  assert.equal(statsAggregate.bestReadingWindow(late).start, 23);
+  assert.equal(statsAggregate.hourLabel(0), "12 am");
+  assert.equal(statsAggregate.hourLabel(13), "1 pm");
+});
+
+test("shelf breakdown ranks shelves by reading time and folds the rest", () => {
+  const shelves = new Map([["b1", "Stoics"], ["b2", "Stoics"], ["b3", null], ["b4", "Poetry"]]);
+  const rows = statsAggregate.buildShelfTotals([
+    { book_id: "b1", duration_seconds: 3600 },
+    { book_id: "b2", duration_seconds: 1800 },
+    { book_id: "b3", duration_seconds: 600 },
+    { book_id: "b4", duration_seconds: 1200 },
+    { book_id: "gone", duration_seconds: 9999 },
+  ], shelves);
+  assert.deepEqual(rows.map((row) => [row.shelf, Math.round(row.minutes), row.books]), [["Stoics", 90, 2], ["Poetry", 20, 1], [null, 10, 1]]);
+  const html = render(h(ShelfBreakdown, { rows }));
+  assert.match(html, /Stoics[\s\S]*Poetry[\s\S]*Unshelved/);
+  assert.match(html, /75%<\/span> · 1h 30m/);
+  const many = Array.from({ length: 8 }, (_, i) => ({ shelf: `S${i}`, minutes: 80 - i, books: 1 }));
+  assert.match(render(h(ShelfBreakdown, { rows: many })), /Other shelves \(3\)/);
+  assert.match(render(h(ShelfBreakdown, { rows: [] })), /will show up here/);
+});
+
+test("on this day prefers the same date in past years, then the week, then a month ago", () => {
+  const now = new Date(2026, 10, 19, 9);
+  const entry = (id, date) => ({ id, kind: "note", note: id, excerpt: null, location: null, createdAt: date.toISOString(), book: null });
+  const exact = entry("exact", new Date(2024, 10, 19, 22));
+  const nearby = entry("nearby", new Date(2025, 10, 21, 8));
+  const month = entry("month", new Date(2026, 9, 19, 12));
+  const recent = entry("recent", new Date(2026, 10, 18, 12));
+  const today = entry("today", new Date(2026, 10, 19, 8));
+  assert.deepEqual(onThisDay.pickMemories([nearby, exact, month, recent, today], now).map((m) => [m.entry.id, m.label]), [["exact", "2 years ago"]]);
+  assert.deepEqual(onThisDay.pickMemories([nearby, month], now).map((m) => [m.entry.id, m.label]), [["nearby", "This week, 1 year ago"]]);
+  assert.deepEqual(onThisDay.pickMemories([month, recent], now).map((m) => [m.entry.id, m.label]), [["month", "A month ago today"]]);
+  assert.deepEqual(onThisDay.pickMemories([recent, today], now), []);
+  const ranges = onThisDay.memoryRanges(now, 2024);
+  assert.equal(ranges.length, 3); // a month ago, 2025, 2024
+  for (const range of ranges) assert.ok(range.from < range.to);
+  assert.ok(ranges.some((range) => range.from < exact.createdAt && exact.createdAt < range.to));
+});
+
+test("library export lists tags with entries", () => {
+  const md = exportLib.buildExportMarkdown({
+    exported_at: "2026-10-30T09:00:00Z", note: "",
+    books: [{ id: "b1", title: "Meditations", author: null, format: "epub", category: null, added_at: "2026-01-01T00:00:00Z", finished_at: null, want_to_read: false, is_favorite: false, progress_percent: null }],
+    annotations: [
+      { id: "a1", type: "note", book_id: null, location: null, excerpt: null, note: "Loose thought.", created_at: "2026-02-06T10:00:00Z", tags: ["stoic", "mornings"] },
+      { id: "a2", type: "note", book_id: "b1", location: "x", excerpt: null, note: "On the book.", created_at: "2026-02-07T10:00:00Z", tags: ["stoic"] },
+      { id: "a3", type: "highlight", book_id: "b1", location: "x", excerpt: "A passage.", note: "Why it matters.", color: "sage", created_at: "2026-02-08T10:00:00Z", tags: [] },
+    ],
+    reading_sessions: [], stats: null, preferences: null,
+  });
+  assert.match(md, /Loose thought\.\n\n#stoic #mornings/);
+  assert.match(md, /- Feb 7, 2026: On the book\. #stoic/);
+  assert.match(md, /> A passage\.\n\nWhy it matters\./);
 });

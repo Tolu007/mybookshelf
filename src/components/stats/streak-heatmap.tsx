@@ -13,20 +13,22 @@ export function StreakHeatmap({
 }) {
   const { columns, monthMarkers } = buildYearHeatmapWeeks(dailyMinutes, year);
 
+  // The month labels and the grid are one block of fixed width, so they
+  // scroll together inside the page's scroller instead of each on its own.
   return (
-    <div className="space-y-1">
-      <div className="relative h-4" style={{ width: columns.length * (CELL_PX + GAP_PX) }}>
+    <div className="w-max space-y-1">
+      <div className="relative h-4" style={{ width: columns.length * (CELL_PX + GAP_PX) - GAP_PX }}>
         {monthMarkers.map((marker) => (
           <span
             key={marker.column}
-            className="absolute text-xs text-muted-foreground"
+            className="absolute text-xs whitespace-nowrap text-muted-foreground"
             style={{ left: marker.column * (CELL_PX + GAP_PX) }}
           >
             {marker.label}
           </span>
         ))}
       </div>
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex gap-1 pb-1">
         {columns.map((week, weekIndex) => (
           <div key={weekIndex} className="flex flex-col gap-1">
             {week.map((cell, dayIndex) =>

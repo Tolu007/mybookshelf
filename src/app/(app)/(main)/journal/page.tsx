@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { LibraryBig } from "lucide-react";
+import { Hash, LibraryBig, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { JournalList } from "@/components/journal/journal-list";
-import { inTab, matchesQuery, paginate, parseTab, tabCounts, type JournalEntry } from "@/lib/journal";
+import { hasTag, inGroup, inTab, journalHref, matchesQuery, paginate, parseTab, tabCounts, tagCounts, UNGROUPED, type JournalEntry, type JournalGroup } from "@/lib/journal";
+import { cn } from "@/lib/utils";
+import { JournalGroups } from "@/components/journal/journal-groups";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import { JournalComposer } from "@/components/journal/journal-composer";
 import { PageHeader } from "@/components/page-header";
@@ -14,7 +16,11 @@ type EntryRow = {
   note: string | null;
   excerpt: string | null;
   created_at: string;
+  edited_at: string | null;
   book: { id: string; title: string; format: string } | null;
+  group: { id: string; name: string } | null;
+  tags: string[] | null;
+  color: string | null;
 };
 
 const INDEXED_VOLUMES = 6;
@@ -22,7 +28,7 @@ const INDEXED_VOLUMES = 6;
 export default async function JournalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tab?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; tab?: string; page?: string; group?: string; tag?: string }>;
 }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
@@ -34,11 +40,11 @@ export default async function JournalPage({
 
   if (!user) return null;
 
-  const [{ data: rows }, { data: allBooks }, { data: progress }] = await Promise.all([
+  const [{ data: rows }, { data: allBooks }, { data: progress }, { data: groupRows }] = await Promise.all([
     fetchAll<EntryRow>((from, to) =>
       supabase
         .from("annotations")
-        .select("id, type, location, note, excerpt, created_at, book:books(id, title, format)")
+        .select("id, type, location, note, excerpt, created_at, edited_at, tags, color, book:books(id, title, format), group:journal_groups(id, name)")
         .in("type", ["note", "highlight"])
         .order("created_at", { ascending: false })
         .order("id")
@@ -46,7 +52,12 @@ export default async function JournalPage({
     ),
     supabase.from("books").select("id, title, author").order("title"),
     supabase.from("reading_progress").select("book_id, location"),
+    supabase.from("journal_groups").select("id, name").order("name"),
   ]);
+
+  const groups: JournalGroup[] = groupRows ?? [];
+  // An unknown group in the URL (e.g. one just deleted) falls back to all.
+  const group = params.group === UNGROUPED || groups.some((item) => item.id === params.group) ? params.group : undefined;
 
   const locationByBook = new Map((progress ?? []).map((row) => [row.book_id, row.location as string | null]));
   const books = (allBooks ?? []).map((book) => ({
@@ -63,8 +74,22 @@ export default async function JournalPage({
     excerpt: row.excerpt,
     location: row.location,
     createdAt: row.created_at,
+    editedAt: row.edited_at,
     book: row.book,
+    group: row.group,
+    tags: row.tags ?? [],
+    color: row.color,
   }));
+
+  const allTags = tagCounts(entries);
+  // Only a tag that's actually in use filters the list.
+  const tag = allTags.some((item) => item.tag === params.tag) ? params.tag : undefined;
+
+  const groupCounts: Record<string, number> = { [UNGROUPED]: 0 };
+  for (const entry of entries) {
+    const key = entry.group?.id ?? UNGROUPED;
+    groupCounts[key] = (groupCounts[key] ?? 0) + 1;
+  }
 
   // Books ranked by how much you've written in them.
   const entryCounts = new Map<string, number>();
@@ -72,7 +97,7 @@ export default async function JournalPage({
     if (entry.book) entryCounts.set(entry.book.id, (entryCounts.get(entry.book.id) ?? 0) + 1);
   }
   // Search applies before tab counts, so each tab shows how many match.
-  const matching = entries.filter((entry) => matchesQuery(entry, query));
+  const matching = entries.filter((entry) => inGroup(entry, group) && hasTag(entry, tag) && matchesQuery(entry, query));
   const counts = tabCounts(matching);
   const { items: shown, pagination } = paginate(matching.filter((entry) => inTab(entry, tab)), params.page);
 
@@ -89,10 +114,47 @@ export default async function JournalPage({
         description="Reflections, notes and highlights from your reading life, or about anything at all."
       />
 
-      <JournalComposer books={books} />
+      <JournalComposer key={`${group ?? "all"}:${tag ?? ""}`} books={books} groups={groups} defaultGroupId={group && group !== UNGROUPED ? group : ""} defaultTags={tag ? [tag] : []} tagSuggestions={allTags.map((item) => item.tag)} />
 
       <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <JournalGroups groups={groups} counts={groupCounts} total={entries.length} active={group} query={query} tab={tab} tag={tag} />
+          <section aria-labelledby="tags-heading" className="surface p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 id="tags-heading" className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                <Hash className="size-3.5" aria-hidden="true" /> Tags
+              </h2>
+              {tag && (
+                <Link href={journalHref({ q: query, tab, group })} className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage hover:underline">
+                  <X className="size-3" aria-hidden="true" /> Clear
+                </Link>
+              )}
+            </div>
+            {allTags.length === 0 ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">Add tags to entries to see them here.</p>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {allTags.map((item) => {
+                  const active = item.tag === tag;
+                  return (
+                    <li key={item.tag}>
+                      <Link
+                        href={journalHref({ q: query, tab, group, tag: active ? undefined : item.tag })}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] font-semibold transition-colors",
+                          active ? "border-primary/30 bg-primary text-primary-foreground" : "border-border bg-secondary text-sage hover:border-sage/40"
+                        )}
+                      >
+                        #{item.tag}
+                        <span className={cn("tabular-nums", active ? "opacity-80" : "text-muted-foreground")}>{item.count}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
           <section aria-labelledby="indexed-heading" className="surface p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 id="indexed-heading" className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
@@ -121,7 +183,7 @@ export default async function JournalPage({
           </section>
         </aside>
 
-        <JournalList entries={shown} counts={counts} tab={tab} query={query} pagination={pagination} />
+        <JournalList entries={shown} counts={counts} tab={tab} query={query} pagination={pagination} groups={groups} group={group} tag={tag} tagSuggestions={allTags.map((item) => item.tag)} />
       </div>
     </div>
   );

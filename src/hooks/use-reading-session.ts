@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { sendOrQueue } from "@/lib/offline-queue";
-import { isPlausiblePage } from "@/lib/reading-speed";
+import { addPageToSample } from "@/lib/reading-speed";
 
 const MIN_SESSION_SECONDS = 30;
 
@@ -153,12 +153,12 @@ export function useReadingSession(
   const pageTurn = useCallback((words: number | null, forward: boolean) => {
     const now = elapsedNow();
     const previous = pageRef.current;
-    if (previous && forward && previous.words !== null && isPlausiblePage(previous.words, now - previous.enteredAt)) {
-      sampleRef.current = {
-        words: sampleRef.current.words + previous.words,
-        seconds: sampleRef.current.seconds + (now - previous.enteredAt),
-      };
-      setSpeedSample(sampleRef.current);
+    if (previous) {
+      const next = addPageToSample(sampleRef.current, { words: previous.words, seconds: now - previous.enteredAt }, forward);
+      if (next !== sampleRef.current) {
+        sampleRef.current = next;
+        setSpeedSample(next);
+      }
     }
     pageRef.current = { words, enteredAt: now };
     markActivity();
