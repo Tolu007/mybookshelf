@@ -213,8 +213,13 @@ export function ReaderScrubber({
               <Hourglass className="size-3" aria-hidden="true" /> {timeLeft}
             </span>
           )}
-          {timeLeft && speed && <span className="hidden sm:inline" aria-hidden="true">•</span>}
-          {speed && <span className="hidden font-mono sm:inline">Reading cadence: {speed}</span>}
+          {timeLeft && speed && <span aria-hidden="true">•</span>}
+          {speed && (
+            <span className="font-mono">
+              <span className="sr-only sm:not-sr-only">Reading cadence: </span>
+              {speed}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
           {chapter && <span>Chapter: <strong className="text-foreground">{chapter}</strong></span>}

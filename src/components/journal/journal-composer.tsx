@@ -2,40 +2,64 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { BookOpen, Feather, NotebookPen, Save } from "lucide-react";
+import { BookOpen, Feather, FolderOpen, NotebookPen, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { cn } from "@/lib/utils";
+import { GROUP_NAME_MAX } from "@/lib/journal-groups";
+import type { JournalGroup } from "@/lib/journal";
+import { TagInput } from "@/components/journal/tag-input";
+
+const NEW_GROUP = "__new__";
 
 type JournalBook = { id: string; title: string; location: string | null };
 
 // The writing desk at the top of the journal: a standalone reflection, or a
 // note linked to one of your books.
-export function JournalComposer({ books }: { books: JournalBook[] }) {
+export function JournalComposer({ books, groups = [], defaultGroupId = "", defaultTags = [], tagSuggestions = [] }: { books: JournalBook[]; groups?: JournalGroup[]; defaultGroupId?: string; defaultTags?: string[]; tagSuggestions?: string[] }) {
   const router = useRouter();
   const inputId = useId();
   const [linked, setLinked] = useState(false);
   const [bookId, setBookId] = useState(books[0]?.id ?? "");
   const [text, setText] = useState("");
+  const [groupId, setGroupId] = useState(defaultGroupId);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [tags, setTags] = useState(defaultTags);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   async function save() {
-    if (!text.trim() || saving) return;
+    if (!text.trim() || saving || (groupId === NEW_GROUP && !newGroupName.trim())) return;
     const book = linked ? books.find((item) => item.id === bookId) : undefined;
     setSaving(true);
     setError(null);
     setStatus(null);
     try {
+      let targetGroupId: string | null = groupId || null;
+      if (groupId === NEW_GROUP) {
+        const created = await fetch("/api/journal-groups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newGroupName.trim() }),
+        });
+        if (!created.ok) throw new Error("The group couldn't be created.");
+        targetGroupId = ((await created.json()) as { group: JournalGroup }).group.id;
+        // Keep filing into the new group if the next save fails or for the next entry.
+        setGroupId(targetGroupId);
+        setNewGroupName("");
+      }
       const response = await sendOrQueue("/api/annotations", "POST", {
         bookId: book?.id ?? null,
         location: book?.location ?? null,
         note: text.trim(),
+        groupId: targetGroupId,
+        tags,
       });
       if (response && !response.ok) throw new Error("Your entry couldn't be saved. Please try again.");
       setStatus(response ? "Entry saved." : "Entry queued on this device. It will sync when you're back online.");
       setText("");
+      setTags(defaultTags);
       router.refresh();
     } catch {
       setError("Your entry couldn't be saved. Your draft is still here.");
@@ -91,6 +115,35 @@ export function JournalComposer({ books }: { books: JournalBook[] }) {
             </select>
           </div>
         )}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={inputId + "-group"} className="meta flex items-center gap-1"><FolderOpen className="size-3" aria-hidden="true" /> Group</label>
+          <select
+            id={inputId + "-group"}
+            value={groupId}
+            onChange={(event) => setGroupId(event.target.value)}
+            disabled={saving}
+            className="h-8 max-w-full min-w-0 rounded-lg border border-border bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-primary/15 sm:max-w-xs dark:bg-secondary"
+          >
+            <option value="">No group</option>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            <option value={NEW_GROUP}>+ New group…</option>
+          </select>
+          {groupId === NEW_GROUP && (
+            <>
+              <label htmlFor={inputId + "-new-group"} className="sr-only">New group name</label>
+              <input
+                id={inputId + "-new-group"}
+                autoFocus
+                value={newGroupName}
+                onChange={(event) => setNewGroupName(event.target.value)}
+                maxLength={GROUP_NAME_MAX}
+                placeholder="Name the new group"
+                disabled={saving}
+                className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-primary/15 sm:max-w-xs dark:bg-secondary"
+              />
+            </>
+          )}
+        </div>
         <label htmlFor={inputId + "-note"} className="sr-only">Your entry</label>
         <textarea
           id={inputId + "-note"}
@@ -102,13 +155,14 @@ export function JournalComposer({ books }: { books: JournalBook[] }) {
           disabled={saving}
           className="field-sizing-content min-h-32 w-full resize-none rounded-lg border border-border bg-background px-4 py-3 font-heading text-[17px] leading-7 outline-none placeholder:text-muted-foreground focus-visible:border-sage/60 focus-visible:ring-3 focus-visible:ring-primary/15 dark:bg-well"
         />
+        <TagInput tags={tags} onChange={setTags} suggestions={tagSuggestions} disabled={saving} />
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {status && !error && <p role="status" className="text-xs text-muted-foreground">{status}</p>}
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border bg-card px-4 py-3 sm:px-5">
         <span className="meta">{text.length} / 2,000</span>
-        <Button onClick={save} disabled={saving || !text.trim()}>
+        <Button onClick={save} disabled={saving || !text.trim() || (groupId === NEW_GROUP && !newGroupName.trim())}>
           <Save /> {saving ? "Saving…" : "Save entry"}
         </Button>
       </div>

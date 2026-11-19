@@ -10,10 +10,13 @@ import { ReadingBarChart, YearlyBarChart } from "@/components/stats/reading-bar-
 import { ProgressRibbon } from "@/components/library/reading-card";
 import { PageHeader } from "@/components/page-header";
 import { FinishedBooksTable, type FinishedBookRow } from "@/components/stats/finished-books-table";
+import { ReadingWindow } from "@/components/stats/reading-window";
+import { ShelfBreakdown } from "@/components/stats/shelf-breakdown";
 import { cn } from "@/lib/utils";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import {
   buildDailyMinutesMap,
+  buildShelfTotals,
   buildMonthlyTotals,
   buildYearlyTotals,
   countActiveDays,
@@ -85,7 +88,7 @@ export default async function StatsPage({
   const sessionsFrom = allTime ? null : isCurrentYear && lastMonthStart < yearStart ? lastMonthStart : yearStart;
 
   const sessionsPage = (from: number, to: number) => {
-    let query = supabase.from("reading_sessions").select("id, local_date, duration_seconds").order("id");
+    let query = supabase.from("reading_sessions").select("id, local_date, duration_seconds, started_at, book_id").order("id");
     if (sessionsFrom) query = query.gte("local_date", sessionsFrom).lte("local_date", yearEnd);
     return query.range(from, to);
   };
@@ -100,13 +103,14 @@ export default async function StatsPage({
       .lt("finished_at", new Date(year + 1, 0, 1).toISOString());
   }
 
-  const [{ data: stats }, { data: finishedBooks }, { data: sessions }, preferences, averageWpm, { data: categories }] = await Promise.all([
+  const [{ data: stats }, { data: finishedBooks }, { data: sessions }, preferences, averageWpm, { data: categories }, { data: libraryBooks }] = await Promise.all([
     supabase.from("user_stats").select("current_streak, longest_streak").eq("user_id", user.id).maybeSingle(),
     finishedQuery,
     fetchAll(sessionsPage),
     loadPreferences(supabase, user.id),
     loadAverageWpm(supabase, allTime ? {} : { from: yearStart, to: yearEnd }),
     supabase.from("categories").select("id, name"),
+    fetchAll<{ id: string; category_id: string | null }>((from, to) => supabase.from("books").select("id, category_id").order("id").range(from, to)),
   ]);
 
   // Time and sessions per finished book, across all of its reading.
@@ -151,7 +155,11 @@ export default async function StatsPage({
       ? differenceInCalendarDays(now, new Date(year, 0, 1)) + 1
       : getDaysInYear(new Date(year, 0, 1));
   const activeDays = countActiveDays(dailyMinutes, allTime ? "0000-00-00" : yearStart, allTime ? today : isCurrentYear ? today : yearEnd);
-  const speedNote = averageWpm ? <p className="text-sage">Average speed: {averageWpm} words / min</p> : null;
+  const speedNote = averageWpm ? (
+    <p className="text-sage">Average speed: {averageWpm} words / min</p>
+  ) : (
+    <p>Reading speed appears once you&rsquo;ve turned a few pages in the reader.</p>
+  );
 
   let tiles: React.ReactNode;
   if (isCurrentYear) {
@@ -255,6 +263,12 @@ export default async function StatsPage({
     );
   }
 
+  // Shelves are the library's genres.
+  const categoryName = new Map((categories ?? []).map((category) => [category.id, category.name as string]));
+  const shelfByBook = new Map(libraryBooks.map((book) => [book.id, book.category_id ? categoryName.get(book.category_id) ?? null : null]));
+  const shelfTotals = buildShelfTotals(periodRows, shelfByBook);
+  const windowSessions = periodRows.map((row) => ({ started_at: row.started_at, duration_seconds: row.duration_seconds }));
+
   const peak = peakWeekday(dailyMinutes);
   const longSessions = periodRows.filter((row) => row.duration_seconds >= LONG_SESSION_SECONDS).length;
   const periodName = allTime ? "all time" : String(year);
@@ -341,6 +355,19 @@ export default async function StatsPage({
           </section>
         </>
       )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section aria-labelledby="window-heading" className="surface min-w-0 p-5 sm:p-6">
+          <h2 id="window-heading" className="font-heading text-xl leading-7 font-semibold">Best reading window</h2>
+          <p className="mt-1 mb-4 text-[13px] text-muted-foreground">When in the day you read most in {periodName}, in your time zone; your best two hours in amber.</p>
+          <ReadingWindow sessions={windowSessions} />
+        </section>
+        <section aria-labelledby="shelves-heading" className="surface min-w-0 p-5 sm:p-6">
+          <h2 id="shelves-heading" className="font-heading text-xl leading-7 font-semibold">Reading by shelf</h2>
+          <p className="mt-1 mb-4 text-[13px] text-muted-foreground">Share of your reading time on each shelf in {periodName}.</p>
+          <ShelfBreakdown rows={shelfTotals} />
+        </section>
+      </div>
 
       <FinishedBooksTable books={finishedRows} periodName={periodName} />
     </div>

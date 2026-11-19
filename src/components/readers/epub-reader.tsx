@@ -19,13 +19,17 @@ import { useDarkMode } from "@/hooks/use-dark-mode";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { downloadBook, INITIAL_READER_LOAD, readerErrorState, type ReaderLoadState } from "@/lib/book-download";
 import { PAPERS, READER_FONTS, columnWidthPx, readerFontStylesheet, type Preferences } from "@/lib/preferences";
-import { MIN_SAMPLE_WORDS, countWords, formatTimeLeft, wordsPerMinute } from "@/lib/reading-speed";
+import { countWords, currentWpm, formatTimeLeft, speedLabel } from "@/lib/reading-speed";
 import { chapterAt, chapterPositions, tidyChapters, type ReaderChapter } from "@/lib/reader-chapters";
+import { HIGHLIGHT_OPACITY, highlightColor } from "@/lib/highlight-colors";
+import { HighlightColorPicker, useHighlightColor } from "@/components/readers/highlight-color-picker";
 
 const SWIPE_MIN_DISTANCE = 60;
 // Horizontal padding inside the page card, on each side.
 const PAGE_PADDING = 48;
-const HIGHLIGHT_STYLE = { fill: "#d97736", "fill-opacity": "0.35", "mix-blend-mode": "multiply" };
+function highlightStyle(color: unknown) {
+  return { fill: highlightColor(color).fill, "fill-opacity": String(HIGHLIGHT_OPACITY), "mix-blend-mode": "multiply" };
+}
 
 type Typography = Preferences["reader"];
 
@@ -99,6 +103,9 @@ export function EpubReader({
   const fontUrlRef = useRef(readerFontStylesheet(typography.font));
   const [isFinished, setIsFinished] = useState(initialIsFinished);
   const [highlightMode, setHighlightMode] = useState(false);
+  const pickedColor = useHighlightColor();
+  // The selection handler is set up once per book, so it reads the colour from a ref.
+  const highlightColorRef = useRef(pickedColor);
   const [annotationsVersion, setAnnotationsVersion] = useState(0);
   const [loadState, setLoadState] = useState<ReaderLoadState>(INITIAL_READER_LOAD);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -106,11 +113,12 @@ export function EpubReader({
   const [chapters, setChapters] = useState<ReaderChapter[]>([]);
   const dark = useDarkMode();
   const session = useReadingSession(bookId, { autoPauseMinutes: timer.autoPauseMinutes });
-  const { markActivity, pageTurn } = session;
+  const { markActivity, pageTurn, notePageWords } = session;
   useIntervalChime(session.elapsedSeconds, timer.chimeMinutes);
   const pomodoro = usePomodoro(session, { enabled: timer.pomodoro, focusMinutes: timer.focusMinutes, breakMinutes: timer.breakMinutes });
   // Page turns happen inside epub.js callbacks set up once per book.
   const pageTurnRef = useRef(pageTurn);
+  const notePageWordsRef = useRef(notePageWords);
   const saveProgress = useProgressSync(bookId);
   const [notesOpen, setNotesOpen] = useNotesPanelState();
   const notesPanelId = useId();
@@ -119,11 +127,13 @@ export function EpubReader({
 
   useEffect(() => {
     highlightModeRef.current = highlightMode;
-  }, [highlightMode]);
+    highlightColorRef.current = pickedColor;
+  }, [highlightMode, pickedColor]);
 
   useEffect(() => {
     pageTurnRef.current = pageTurn;
-  }, [pageTurn]);
+    notePageWordsRef.current = notePageWords;
+  }, [pageTurn, notePageWords]);
 
   useEffect(() => {
     if (!viewerRef.current) return;
@@ -184,6 +194,8 @@ export function EpubReader({
     // chapter's words over its pages at the current layout.
     const sectionWords = new Map<string, number>();
     let previousPage: { index: number; page: number } | null = null;
+    // A page shown before its chapter was counted; filled in once it is.
+    let uncounted: { href: string; total: number } | null = null;
 
     rendition.on(
       "relocated",
@@ -195,6 +207,7 @@ export function EpubReader({
         const page = displayed?.page ?? 0;
         const forward = previousPage !== null && (index > previousPage.index || (index === previousPage.index && page > previousPage.page));
         previousPage = { index, page };
+        uncounted = wordsPerPage === null && href && displayed?.total ? { href, total: displayed.total } : null;
         pageTurnRef.current(wordsPerPage, forward);
         const percent = Math.round(location.start.percentage * 10000) / 100;
         const locationsReady = book.locations.length() > 0;
@@ -219,13 +232,15 @@ export function EpubReader({
       const selectedText = contents.window.getSelection()?.toString().trim();
       if (!selectedText) return;
 
-      rendition.annotations.highlight(cfiRange, {}, undefined, "shelf-highlight", HIGHLIGHT_STYLE);
+      const color = highlightColorRef.current;
+      rendition.annotations.highlight(cfiRange, {}, undefined, "shelf-highlight", highlightStyle(color));
       contents.window.getSelection()?.removeAllRanges();
 
       sendOrQueue(`/api/books/${bookId}/annotations`, "POST", {
         type: "highlight",
         location: cfiRange,
         excerpt: selectedText.slice(0, 500),
+        color,
       }).then(() => setAnnotationsVersion((v) => v + 1));
     });
 
@@ -235,7 +250,16 @@ export function EpubReader({
     rendition.on("rendered", (section: { href?: string }, view: { document?: Document }) => {
       const doc = view?.document;
       if (!doc) return;
-      if (section?.href) sectionWords.set(section.href, countWords(doc.body?.textContent ?? ""));
+      if (section?.href) {
+        const words = countWords(doc.body?.textContent ?? "");
+        sectionWords.set(section.href, words);
+        if (uncounted?.href === section.href) {
+          const perPage = Math.round(words / uncounted.total);
+          uncounted = null;
+          notePageWordsRef.current(perPage);
+          setPosition((value) => ({ ...value, wordsPerPage: perPage }));
+        }
+      }
 
       let start: { x: number; y: number } | null = null;
 
@@ -293,10 +317,10 @@ export function EpubReader({
 
     fetch(`/api/books/${bookId}/annotations`)
       .then((res) => res.json())
-      .then((data: { annotations?: { type: string; location: string }[] }) => {
+      .then((data: { annotations?: { type: string; location: string; color?: string | null }[] }) => {
         for (const annotation of data.annotations ?? []) {
           if (annotation.type === "highlight") {
-            rendition.annotations.highlight(annotation.location, {}, undefined, "shelf-highlight", HIGHLIGHT_STYLE);
+            rendition.annotations.highlight(annotation.location, {}, undefined, "shelf-highlight", highlightStyle(annotation.color));
           }
         }
       })
@@ -359,10 +383,7 @@ export function EpubReader({
 
   const paper = paperFor(typography, dark);
   const place = chapterAt(chapters, position.section);
-  const wpm =
-    session.speedSample.words >= MIN_SAMPLE_WORDS
-      ? wordsPerMinute(session.speedSample.words, session.speedSample.seconds)
-      : averageWpm;
+  const wpm = currentWpm(session.speedSample, averageWpm);
   const chapterMinutesLeft =
     wpm && position.wordsPerPage && position.chapterPage && position.chapterPages
       ? ((position.chapterPages - position.chapterPage) * position.wordsPerPage) / wpm
@@ -401,6 +422,7 @@ export function EpubReader({
         >
           <Highlighter />
         </Button>
+        {highlightMode && <HighlightColorPicker value={pickedColor} />}
         <BookmarkButton
           bookId={bookId}
           getCurrentLocation={() => currentCfiRef.current ?? ""}
@@ -459,7 +481,7 @@ export function EpubReader({
         markers={chapters.flatMap((chapter) => (chapter.position !== null ? [{ label: chapter.label, percent: chapter.position * 100 }] : []))}
         onSeek={seek}
         timeLeft={chapterMinutesLeft !== null ? `~${formatTimeLeft(chapterMinutesLeft)} left in ${place ? `chapter ${place.number}` : "this chapter"}` : null}
-        speed={wpm ? `${wpm} wpm` : null}
+        speed={speedLabel(wpm)}
         chapter={place ? `${place.number} of ${place.count}` : null}
         position={chapterPageLabel ? `Page ${position.chapterPage} of ${position.chapterPages} in chapter` : `${Math.round(position.percent)}% of book`}
       />

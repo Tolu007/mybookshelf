@@ -26,3 +26,23 @@ export function formatTimeLeft(minutes: number) {
   if (total < 60) return `${total} min`;
   return `${Math.floor(total / 60)}h ${total % 60}m`;
 }
+
+export type SpeedSample = { words: number; seconds: number };
+
+// Adds the page just left to the sample when it was read, not flipped past
+// or left open: only forward turns, with a known word count, at a
+// plausible pace.
+export function addPageToSample(sample: SpeedSample, page: { words: number | null; seconds: number }, forward: boolean): SpeedSample {
+  if (!forward || page.words === null || !isPlausiblePage(page.words, page.seconds)) return sample;
+  return { words: sample.words + page.words, seconds: sample.seconds + page.seconds };
+}
+
+// This session's speed once enough is measured, else your past average.
+export function currentWpm(sample: SpeedSample, averageWpm: number | null) {
+  return sample.words >= MIN_SAMPLE_WORDS ? wordsPerMinute(sample.words, sample.seconds) : averageWpm;
+}
+
+// What the reader shows: the speed, or that it's still being measured.
+export function speedLabel(wpm: number | null) {
+  return wpm ? `${wpm} wpm` : "measuring…";
+}

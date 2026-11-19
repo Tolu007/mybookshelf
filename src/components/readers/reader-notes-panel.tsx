@@ -6,6 +6,7 @@ import { BookOpen, PanelRightClose, PencilLine, PlusCircle, Trash2 } from "lucid
 import { Button } from "@/components/ui/button";
 import { sendOrQueue } from "@/lib/offline-queue";
 import { cn } from "@/lib/utils";
+import { highlightColor } from "@/lib/highlight-colors";
 
 export type Annotation = {
   id: string;
@@ -13,6 +14,8 @@ export type Annotation = {
   location: string;
   excerpt: string | null;
   note: string | null;
+  color?: string | null;
+  tags?: string[];
   created_at: string;
 };
 
@@ -226,7 +229,11 @@ export function ReaderNotesPanel({
             <article key={annotation.id} className="group flex flex-col gap-1.5 rounded-xl bg-card p-3 transition-colors hover:bg-secondary dark:bg-secondary dark:hover:bg-accent">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold">
-                  <span className={cn("size-2 shrink-0 rounded-full", DOT[annotation.type])} aria-hidden="true" />
+                  <span
+                    className={cn("size-2 shrink-0 rounded-full", DOT[annotation.type])}
+                    style={annotation.type === "highlight" ? { backgroundColor: highlightColor(annotation.color).fill } : undefined}
+                    aria-hidden="true"
+                  />
                   <span className="truncate capitalize">{where ?? annotation.type}</span>
                 </span>
                 <time dateTime={annotation.created_at} className="shrink-0 text-[11px] text-muted-foreground">
@@ -244,6 +251,13 @@ export function ReaderNotesPanel({
                 )}
                 {annotation.note && <p className="rounded-md bg-popover p-2 text-[13px] leading-5 whitespace-pre-wrap dark:bg-background">{annotation.note}</p>}
                 {!annotation.excerpt && !annotation.note && <p className="text-[13px] text-muted-foreground">Bookmarked this page</p>}
+                {(annotation.tags ?? []).length > 0 && (
+                  <span className="flex flex-wrap gap-1">
+                    {(annotation.tags ?? []).map((tag) => (
+                      <span key={tag} className="rounded-sm bg-popover px-1.5 py-0.5 text-[10px] font-semibold text-sage dark:bg-background">#{tag}</span>
+                    ))}
+                  </span>
+                )}
               </button>
               <div className="flex justify-end">
                 <Button variant="ghost" size="icon-xs" aria-label={`Delete ${annotation.type}`} onClick={() => onDelete(annotation.id)} className="text-muted-foreground hover:text-destructive">

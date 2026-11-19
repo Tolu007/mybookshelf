@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isHighlightColor } from "@/lib/highlight-colors";
+import { parseTags } from "@/lib/journal";
 
 const TYPES = ["highlight", "note", "bookmark"] as const;
 const MAX_RECTS = 50;
@@ -37,7 +39,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("annotations")
-    .select("id, type, location, excerpt, note, rects, created_at")
+    .select("id, type, location, excerpt, note, rects, color, tags, created_at")
     .eq("book_id", id)
     .order("created_at", { ascending: false });
 
@@ -80,8 +82,10 @@ export async function POST(
       excerpt: typeof body?.excerpt === "string" ? body.excerpt.slice(0, 1000) : null,
       note: typeof body?.note === "string" ? body.note.slice(0, 2000) : null,
       rects: parseRects(body?.rects),
+      color: type === "highlight" && isHighlightColor(body?.color) ? body.color : null,
+      tags: parseTags(body?.tags) ?? [],
     })
-    .select("id, type, location, excerpt, note, rects, created_at")
+    .select("id, type, location, excerpt, note, rects, color, tags, created_at")
     .single();
 
   if (error) {

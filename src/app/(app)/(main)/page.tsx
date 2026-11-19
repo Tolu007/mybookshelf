@@ -10,6 +10,8 @@ import { TimeGreeting } from "@/components/library/time-greeting";
 import { LibraryFilters } from "@/components/library/library-filters";
 import { LibraryShelves } from "@/components/library/library-shelves";
 import { quoteIndexForDay } from "@/lib/quotes";
+import { OnThisDay } from "@/components/library/on-this-day";
+import { memoryRanges, type MemoryEntry } from "@/lib/on-this-day";
 import {
   filterBooks,
   filterByFormat,
@@ -35,12 +37,37 @@ export default async function LibraryPage({
   if (!user) return null;
 
   const since = format(subDays(new Date(), 29), "yyyy-MM-dd");
-  const [{ data: categories }, { data: bookRows }, { data: progressRows }, { data: recentSessions }] = await Promise.all([
+  const [{ data: categories }, { data: bookRows }, { data: progressRows }, { data: recentSessions }, { data: firstEntry }] = await Promise.all([
     supabase.from("categories").select("id, name").order("name"),
     supabase.from("books").select("id, title, author, cover_url, format, category_id, want_to_read, is_favorite, finished_at, added_at"),
     supabase.from("reading_progress").select("book_id, percent, location, updated_at"),
     supabase.from("reading_sessions").select("duration_seconds").gte("local_date", since),
+    supabase.from("annotations").select("created_at").in("type", ["note", "highlight"]).order("created_at").limit(1).maybeSingle(),
   ]);
+
+  // Candidates for "On this day": entries from around today's date in past
+  // years and a month ago. The browser picks the ones for its own date.
+  let memories: MemoryEntry[] = [];
+  if (firstEntry) {
+    const ranges = memoryRanges(new Date(), new Date(firstEntry.created_at).getFullYear());
+    const { data: memoryRows } = await supabase
+      .from("annotations")
+      .select("id, type, note, excerpt, location, color, created_at, book:books(id, title)")
+      .in("type", ["note", "highlight"])
+      .or(ranges.map((range) => `and(created_at.gte."${range.from}",created_at.lt."${range.to}")`).join(","))
+      .order("created_at", { ascending: false })
+      .limit(200);
+    memories = ((memoryRows ?? []) as unknown as { id: string; type: "note" | "highlight"; note: string | null; excerpt: string | null; location: string | null; color: string | null; created_at: string; book: { id: string; title: string } | null }[]).map((row) => ({
+      id: row.id,
+      kind: row.type,
+      note: row.note,
+      excerpt: row.excerpt,
+      location: row.location,
+      color: row.color,
+      createdAt: row.created_at,
+      book: row.book,
+    }));
+  }
 
   const progressByBook = new Map((progressRows ?? []).map((row) => [row.book_id, row]));
   const books: ShelfBook[] = (bookRows ?? []).map((book) => {
@@ -114,6 +141,8 @@ export default async function LibraryPage({
       />
 
       {!filtering && <QuoteCard initialIndex={quoteIndexForDay()} />}
+
+      {!filtering && memories.length > 0 && <OnThisDay entries={memories} />}
 
       {!filtering && featured.length > 0 && (
         <section aria-labelledby="in-flight-heading" className="space-y-4">
